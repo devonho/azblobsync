@@ -2,7 +2,7 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 from azure.identity import DefaultAzureCredential
 from typing import Optional
 from pathlib import Path
-
+from urllib.parse import quote
 
 def get_blob_service_client(
     account_url: str, credential: Optional[object] = None
@@ -125,6 +125,7 @@ def upload_files_from_list(
     base_path: Optional[str] = None,
     credential: Optional[object] = None,
     overwrite: bool = True,
+    metadata_url_base : str = None
 ) -> None:
     """
     Upload multiple files from a list of local file paths to Azure Blob Storage.
@@ -169,7 +170,8 @@ def upload_files_from_list(
                 container_client.upload_blob(
                     name=blob_name,
                     data=data,
-                    overwrite=overwrite
+                    overwrite=overwrite,
+                    metadata={"url": metadata_url_base + "/" + quote(blob_name)} if metadata_url_base != None else None
                 )
             print(f"Uploaded: {file_path} -> {blob_name}")
             

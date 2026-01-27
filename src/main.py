@@ -17,12 +17,13 @@ def main() -> None:
     file_list = [base_path + "/" + root + "/" + f for f in file_list]
 
     upload_files_from_list(
-    account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
-    container_name=os.environ["AZURE_STORAGE_CONTAINER_NAME"],
-    file_paths=file_list,
-    base_path=base_path + "/" + root,
-    credential=ManagedIdentityCredential()
-)
+        account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+        container_name=os.environ["AZURE_STORAGE_CONTAINER_NAME"],
+        file_paths=file_list,
+        base_path=base_path + "/" + root,
+        credential=ManagedIdentityCredential(),
+        metadata_url_base=os.environ["METADATA_URL_BASE"]
+    )
 
 if __name__ == "__main__":
 	main()
