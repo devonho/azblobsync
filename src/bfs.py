@@ -9,12 +9,16 @@ def bfs_traverse(root: str, base_path: str) -> Iterator[Tuple[str, bool, int]]:
 	while queue:
 		current, level = queue.popleft()
 		yield (current, True, level)
-		with os.scandir(os.path.join(base_path, current)) as it:
+		if level > 0:
+			scanpath = os.path.join(base_path, root, current)
+		else:
+			scanpath = os.path.join(base_path, current) 
+		with os.scandir(scanpath) as it:
 			dirs = []
 			files = []
 			for entry in it:
 				name = entry.name
-				path = entry.path.replace(base_path + os.sep, "")
+				path = entry.path.replace(base_path + os.sep + root + os.sep, "")
 				if entry.is_dir(follow_symlinks=False):
 					dirs.append((name, path))
 				else:
@@ -31,16 +35,3 @@ def get_folders_and_files(root: str, base_path: str):
     folder_list = [{"path":path, "level": level} for path, is_dir, level in items if is_dir]
     file_list = [{"path":path, "level": level} for path, is_dir, level in items if not is_dir]
     return folder_list, file_list
-
-def main() -> None:
-    root = "files"
-    base_path = os.path.dirname(__file__)
-    folder_list, file_list = get_folders_and_files(root, base_path)
-    for item in folder_list:
-        print(item)
-    for item in file_list:
-        print(item)
-
-
-if __name__ == "__main__":
-	main()

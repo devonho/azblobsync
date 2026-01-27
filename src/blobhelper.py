@@ -1,6 +1,7 @@
 from azure.storage.blob import BlobServiceClient, ContainerClient
 from azure.identity import DefaultAzureCredential
 from typing import Optional
+from pathlib import Path
 
 
 def get_blob_service_client(
@@ -115,3 +116,62 @@ def create_folders_from_list(
     """
     folder_paths = [item['path'] for item in folder_list if 'path' in item]
     create_folder_structure(account_url, container_name, folder_paths, credential)
+
+
+def upload_files_from_list(
+    account_url: str,
+    container_name: str,
+    file_paths: list[str],
+    base_path: Optional[str] = None,
+    credential: Optional[object] = None,
+    overwrite: bool = True,
+) -> None:
+    """
+    Upload multiple files from a list of local file paths to Azure Blob Storage.
+    
+    Args:
+        account_url: The Azure Storage account URL.
+        container_name: The name of the container.
+        file_paths: List of local file paths to upload.
+        base_path: Optional base path to remove from file paths when creating blob names.
+                   If None, only the filename is used as blob name.
+        credential: Optional credential object. If None, DefaultAzureCredential is used.
+        overwrite: Whether to overwrite existing blobs. Default is True.
+    """
+    container_client = get_container_client(account_url, container_name, credential)
+    
+    for file_path in file_paths:
+        try:
+            local_file = Path(file_path)
+            
+            if not local_file.exists():
+                print(f"Warning: File not found: {file_path}")
+                continue
+            
+            if not local_file.is_file():
+                print(f"Warning: Not a file: {file_path}")
+                continue
+            
+            # Determine blob name
+            if base_path:
+                base = Path(base_path)
+                try:
+                    relative_path = local_file.relative_to(base)
+                    blob_name = str(relative_path).replace('\\', '/')
+                except ValueError:
+                    # File is not relative to base_path
+                    blob_name = local_file.name
+            else:
+                blob_name = local_file.name
+            
+            # Upload file
+            with open(local_file, 'rb') as data:
+                container_client.upload_blob(
+                    name=blob_name,
+                    data=data,
+                    overwrite=overwrite
+                )
+            print(f"Uploaded: {file_path} -> {blob_name}")
+            
+        except Exception as e:
+            print(f"Error uploading {file_path}: {e}")
