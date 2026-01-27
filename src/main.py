@@ -3,7 +3,7 @@ import sys
 from dotenv import load_dotenv
 from bfs import get_folders_and_files
 from blobhelper import create_folder_structure, upload_files_from_list
-from azure.identity import DefaultAzureCredential, AzureCliCredential
+from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedIdentityCredential
 
 load_dotenv()
 
@@ -21,7 +21,7 @@ def main() -> None:
     container_name=os.environ["AZURE_STORAGE_CONTAINER_NAME"],
     file_paths=file_list,
     base_path=base_path + "/" + root,
-    credential=AzureCliCredential()
+    credential=ManagedIdentityCredential()
 )
 
 if __name__ == "__main__":
