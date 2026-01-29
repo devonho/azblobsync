@@ -171,9 +171,12 @@ def upload_files_from_list(
                     name=blob_name,
                     data=data,
                     overwrite=overwrite,
-                    metadata={"url": metadata_url_base + "/" + quote(blob_name)} if metadata_url_base != None else None
+                    metadata={"url": metadata_url_base + "/" + quote(blob_name)} if metadata_url_base != None else None,                    
+                    encoding="utf-8",
+                    logging_enable=True
                 )
-            print(f"Uploaded: {file_path} -> {blob_name}")
+            #print(f"Uploaded: {file_path} -> {blob_name}")       
+            pass     
             
         except Exception as e:
             print(f"Error uploading {file_path}: {e}")
