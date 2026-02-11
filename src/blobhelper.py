@@ -180,3 +180,222 @@ def upload_files_from_list(
             
         except Exception as e:
             print(f"Error uploading {file_path}: {e}")
+
+
+def compare_containers(
+    source_account_url: str,
+    source_container_name: str,
+    target_account_url: str,
+    target_container_name: str,
+    source_credential: Optional[object] = None,
+    target_credential: Optional[object] = None,
+    prefix: Optional[str] = None,
+    verbose: bool = False,
+) -> dict:
+    """
+    Compare two blob containers (possibly in different storage accounts) and
+    determine which blobs should be created, updated, or deleted in the target
+    container so it matches the source container.
+
+    Args:
+        source_account_url: URL of the source storage account.
+        source_container_name: Name of the source container.
+        target_account_url: URL of the target storage account.
+        target_container_name: Name of the target container.
+        source_credential: Optional credential for the source account.
+        target_credential: Optional credential for the target account.
+        prefix: Optional prefix to limit comparison to blobs under this path.
+        verbose: If True, print summary information.
+
+    Returns:
+        dict with keys:
+            - to_create: list of blob names that exist in source but not in target
+            - to_update: list of blob names that exist in both but source is newer
+            - to_delete: list of blob names that exist in target but not in source
+            - summary: dict with counts
+    """
+    src_client = get_container_client(source_account_url, source_container_name, source_credential)
+    tgt_client = get_container_client(target_account_url, target_container_name, target_credential)
+
+    # Gather blobs from source
+    src_blobs: dict[str, object] = {}
+    try:
+        for blob in src_client.list_blobs(name_starts_with=prefix):
+            src_blobs[blob.name] = blob
+    except Exception as e:
+        raise RuntimeError(f"Failed to list blobs in source container: {e}")
+
+    # Gather blobs from target
+    tgt_blobs: dict[str, object] = {}
+    try:
+        for blob in tgt_client.list_blobs(name_starts_with=prefix):
+            tgt_blobs[blob.name] = blob
+    except Exception as e:
+        raise RuntimeError(f"Failed to list blobs in target container: {e}")
+
+    src_names = set(src_blobs.keys())
+    tgt_names = set(tgt_blobs.keys())
+
+    to_create = sorted(list(src_names - tgt_names))
+    to_delete = sorted(list(tgt_names - src_names))
+
+    # Determine updates by comparing last_modified timestamps when blobs exist in both
+    common = src_names & tgt_names
+    to_update = []
+    for name in common:
+        s_blob = src_blobs[name]
+        t_blob = tgt_blobs[name]
+
+        # Use last_modified if available, otherwise fall back to etag/size comparison
+        s_lm = getattr(s_blob, "last_modified", None)
+        t_lm = getattr(t_blob, "last_modified", None)
+
+        if s_lm is not None and t_lm is not None:
+            try:
+                if s_lm > t_lm:
+                    to_update.append(name)
+            except Exception:
+                # In case comparison fails, fall back to etag
+                pass
+        else:
+            # fallback: compare etag or size
+            s_etag = getattr(s_blob, "etag", None)
+            t_etag = getattr(t_blob, "etag", None)
+            if s_etag and t_etag and s_etag != t_etag:
+                to_update.append(name)
+            else:
+                s_size = getattr(s_blob, "size", None)
+                t_size = getattr(t_blob, "size", None)
+                if s_size is not None and t_size is not None and s_size != t_size:
+                    to_update.append(name)
+
+    to_update = sorted(to_update)
+
+    summary = {"create": len(to_create), "update": len(to_update), "delete": len(to_delete)}
+
+    if verbose:
+        print(f"Comparison summary for prefix='{prefix}': {summary}")
+
+    return {"to_create": to_create, "to_update": to_update, "to_delete": to_delete, "summary": summary}
+
+
+def copy_blobs(
+    source_account_url: str,
+    source_container_name: str,
+    target_account_url: str,
+    target_container_name: str,
+    blob_names: list[str],
+    source_credential: Optional[object] = None,
+    target_credential: Optional[object] = None,
+    overwrite: bool = False,
+    create_folders: bool = True,
+    prefix: Optional[str] = None,
+    verbose: bool = False,
+) -> dict:
+    """
+    Copy blobs from a source container to a target container. Source and target
+    may reside in different storage accounts. The function only processes blobs
+    explicitly listed in the required `blob_names` argument.
+
+    Args:
+        source_account_url: URL of the source storage account.
+        source_container_name: Name of the source container.
+        target_account_url: URL of the target storage account.
+        target_container_name: Name of the target container.
+        blob_names: REQUIRED list of blob names to copy. Only these blobs will be
+                    processed; if you want to copy all blobs, enumerate them
+                    beforehand (e.g., using list_blobs).
+        source_credential: Optional credential for the source account.
+        target_credential: Optional credential for the target account.
+        overwrite: If True, existing target blobs will be overwritten. Default False.
+        create_folders: If True, create parent folder placeholders in the target
+                        for blobs that include '/' in their names.
+        prefix: (ignored) kept for compatibility but not used when blob_names is supplied.
+        verbose: If True, print progress messages.
+
+    Returns:
+        dict with keys:
+            - copied: list of blob names successfully copied
+            - skipped: list of blob names skipped because target exists and overwrite is False
+            - errors: dict mapping blob name to error message for failures
+            - summary: dict with counts
+    """
+    src_container = get_container_client(source_account_url, source_container_name, source_credential)
+    tgt_container = get_container_client(target_account_url, target_container_name, target_credential)
+
+    # Only operate on blobs explicitly provided by the caller
+    names = list(blob_names)
+
+    copied: list[str] = []
+    skipped: list[str] = []
+    errors: dict[str, str] = {}
+    created_parents: set[str] = set()
+
+    for name in names:
+        try:
+            if verbose:
+                print(f"Processing blob: {name}")
+
+            tgt_blob_client = tgt_container.get_blob_client(name)
+
+            # Check existence if not overwriting
+            if not overwrite:
+                try:
+                    tgt_blob_client.get_blob_properties()
+                    if verbose:
+                        print(f"Skipping existing blob (overwrite=False): {name}")
+                    skipped.append(name)
+                    continue
+                except Exception:
+                    # Target does not exist or cannot fetch properties; proceed to copy
+                    pass
+
+            # Optionally create parent folders (simulated using placeholders)
+            if create_folders and "/" in name:
+                parent = "/".join(name.split("/")[:-1])
+                if parent and parent not in created_parents:
+                    try:
+                        create_folder_from_path(target_account_url, target_container_name, parent, target_credential)
+                        created_parents.add(parent)
+                        if verbose:
+                            print(f"Created parent placeholder for: {parent}")
+                    except Exception as e:
+                        # Non-fatal: continue and attempt the blob copy
+                        if verbose:
+                            print(f"Warning: failed to create parent placeholder '{parent}': {e}")
+
+            # Download from source and upload to target
+            src_blob_client = src_container.get_blob_client(name)
+            downloader = src_blob_client.download_blob()
+            data = downloader.readall()
+
+            # Preserve metadata and content settings when possible
+            try:
+                props = src_blob_client.get_blob_properties()
+                metadata = getattr(props, "metadata", None)
+                content_settings = getattr(props, "content_settings", None)
+            except Exception:
+                metadata = None
+                content_settings = None
+
+            # Upload to target
+            tgt_blob_client.upload_blob(
+                name=name,
+                data=data,
+                overwrite=overwrite,
+                metadata=metadata,
+                content_settings=content_settings,
+            )
+
+            copied.append(name)
+            if verbose:
+                print(f"Copied blob: {name}")
+
+        except Exception as e:
+            errors[name] = str(e)
+            if verbose:
+                print(f"Error copying {name}: {e}")
+
+    summary = {"copied": len(copied), "skipped": len(skipped), "errors": len(errors)}
+
+    return {"copied": copied, "skipped": skipped, "errors": errors, "summary": summary}
