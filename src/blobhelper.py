@@ -399,3 +399,60 @@ def copy_blobs(
     summary = {"copied": len(copied), "skipped": len(skipped), "errors": len(errors)}
 
     return {"copied": copied, "skipped": skipped, "errors": errors, "summary": summary}
+
+
+def remove_placeholder_files(
+    account_url: str,
+    container_name: str,
+    credential: Optional[object] = None,
+    prefix: Optional[str] = None,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> dict:
+    """
+    Remove ".placeholder" marker blobs from a container. These are the empty
+    blobs created by `create_folder_structure` to simulate folders (they end
+    with '/.placeholder' or '.placeholder').
+
+    Args:
+        account_url: The Azure Storage account URL.
+        container_name: The name of the container.
+        credential: Optional credential object. If None, DefaultAzureCredential is used.
+        prefix: Optional prefix to limit which blobs are inspected/removed.
+        dry_run: If True, do not actually delete blobs, only report which would be removed.
+        verbose: If True, print progress messages.
+
+    Returns:
+        dict with keys:
+            - removed: list of placeholder blob names removed (or that would be removed in dry-run)
+            - errors: dict mapping blob name to error message for failures
+            - summary: dict with counts
+    """
+    container = get_container_client(account_url, container_name, credential)
+
+    removed: list[str] = []
+    errors: dict[str, str] = {}
+
+    try:
+        for blob in container.list_blobs(name_starts_with=prefix):
+            # match both '/.placeholder' and top-level '.placeholder'
+            if blob.name.endswith('/.placeholder') or blob.name.endswith('.placeholder'):
+                if dry_run:
+                    removed.append(blob.name)
+                    if verbose:
+                        print(f"Dry-run: would remove placeholder: {blob.name}")
+                else:
+                    try:
+                        container.delete_blob(blob.name)
+                        removed.append(blob.name)
+                        if verbose:
+                            print(f"Removed placeholder: {blob.name}")
+                    except Exception as e:
+                        errors[blob.name] = str(e)
+                        if verbose:
+                            print(f"Error deleting placeholder {blob.name}: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Failed listing blobs in container: {e}")
+
+    summary = {"removed": len(removed), "errors": len(errors)}
+    return {"removed": removed, "errors": errors, "summary": summary}

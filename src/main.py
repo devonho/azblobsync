@@ -4,7 +4,7 @@ import sys
 import logging
 from dotenv import load_dotenv
 from bfs import get_folders_and_files
-from blobhelper import create_folder_structure, upload_files_from_list, compare_containers, copy_blobs, get_container_client
+from blobhelper import create_folder_structure, upload_files_from_list, compare_containers, copy_blobs, get_container_client, remove_placeholder_files
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedIdentityCredential
 
 load_dotenv()
@@ -169,6 +169,22 @@ def blob_container_source_blob_container_target_main() -> None:
                 deleted.append(name)
             except Exception as e:
                 delete_errors[name] = str(e)
+
+    # Remove placeholder files created to represent folders in the target container
+    try:
+        remove_result = remove_placeholder_files(
+            account_url=tgt_url,
+            container_name=tgt_container,
+            credential=tgt_cred,
+            prefix=prefix,
+            dry_run=False,
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"Removed placeholders: {remove_result.get('summary', {})}")
+    except Exception as e:
+        # Non-fatal: report and continue
+        print(f"Warning: failed to remove placeholder files: {e}")
 
     summary = {
         "compare": comp.get("summary", {}),
