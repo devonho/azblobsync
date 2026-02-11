@@ -4,7 +4,7 @@ import sys
 import logging
 from dotenv import load_dotenv
 from bfs import get_folders_and_files
-from blobhelper import create_folder_structure, upload_files_from_list, blob_container_source_blob_container_target
+from blobhelper import create_folder_structure, upload_files_from_list, compare_containers, copy_blobs, get_container_client
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedIdentityCredential
 
 load_dotenv()
@@ -104,23 +104,82 @@ def blob_container_source_blob_container_target_main() -> None:
     prefix = os.environ.get("SYNC_PREFIX")
     overwrite_updates = os.environ.get("OVERWRITE_UPDATES", "true").lower() == "true"
     delete_extraneous = os.environ.get("DELETE_EXTRANEOUS", "false").lower() == "true"
+    verbose = os.environ.get("DEBUG", "false").lower() == "true"
 
-    result = blob_container_source_blob_container_target(
-        source_account_url=src_url,
-        source_container_name=src_container,
-        target_account_url=tgt_url,
-        target_container_name=tgt_container,
-        source_credential=ManagedIdentityCredential(),
-        target_credential=ManagedIdentityCredential(),
+    src_cred = ManagedIdentityCredential()
+    tgt_cred = ManagedIdentityCredential()
+
+    # Compare containers
+    comp = compare_containers(
+        src_url,
+        src_container,
+        tgt_url,
+        tgt_container,
+        source_credential=src_cred,
+        target_credential=tgt_cred,
         prefix=prefix,
-        overwrite_updates=overwrite_updates,
-        create_folders=True,
-        delete_extraneous=delete_extraneous,
-        verbose=True,
+        verbose=verbose,
     )
 
-    print("Sync result summary:", result.get("summary", {}))
+    to_create = comp.get("to_create", [])
+    to_update = comp.get("to_update", [])
+    to_delete = comp.get("to_delete", [])
 
+    if verbose:
+        print(f"Compare result: create={len(to_create)} update={len(to_update)} delete={len(to_delete)}")
+
+    copy_create_result = None
+    copy_update_result = None
+
+    if to_create:
+        copy_create_result = copy_blobs(
+            src_url,
+            src_container,
+            tgt_url,
+            tgt_container,
+            blob_names=to_create,
+            source_credential=src_cred,
+            target_credential=tgt_cred,
+            overwrite=False,
+            create_folders=True,
+            verbose=verbose,
+        )
+
+    if to_update:
+        copy_update_result = copy_blobs(
+            src_url,
+            src_container,
+            tgt_url,
+            tgt_container,
+            blob_names=to_update,
+            source_credential=src_cred,
+            target_credential=tgt_cred,
+            overwrite=bool(overwrite_updates),
+            create_folders=True,
+            verbose=verbose,
+        )
+
+    deleted = []
+    delete_errors = {}
+    if delete_extraneous and to_delete:
+        tgt_client = get_container_client(tgt_url, tgt_container, tgt_cred)
+        for name in to_delete:
+            try:
+                tgt_client.delete_blob(name)
+                deleted.append(name)
+            except Exception as e:
+                delete_errors[name] = str(e)
+
+    summary = {
+        "compare": comp.get("summary", {}),
+        "created_copied": copy_create_result.get("summary", {}).get("copied", 0) if copy_create_result else 0,
+        "updated_copied": copy_update_result.get("summary", {}).get("copied", 0) if copy_update_result else 0,
+        "deleted": len(deleted),
+        "delete_errors": len(delete_errors),
+    }
+
+    print("Sync result summary:", summary)
+    return {"comparison": comp, "copy_create": copy_create_result, "copy_update": copy_update_result, "deleted": deleted, "delete_errors": delete_errors, "summary": summary}
 
 def main() -> None:
     pass
