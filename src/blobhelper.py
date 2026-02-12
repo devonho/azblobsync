@@ -380,7 +380,6 @@ def copy_blobs(
 
             # Upload to target
             tgt_blob_client.upload_blob(
-                name=name,
                 data=data,
                 overwrite=overwrite,
                 metadata=metadata,
