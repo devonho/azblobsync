@@ -9,16 +9,16 @@ from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedId
 
 load_dotenv()
 
+
+logger = logging.getLogger("azblobsync")
+
 # Configure a root logging handler with timestamp and file information
-_log_level = logging.DEBUG if os.getenv("DEBUG", "false").lower() == "true" else logging.INFO
-_handler = logging.StreamHandler(sys.stdout)
-_formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)d %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-_handler.setFormatter(_formatter)
-_root_logger = logging.getLogger()
-# Avoid adding duplicate handlers if this module is reloaded
-if not any(isinstance(h, logging.StreamHandler) and h.stream is sys.stdout for h in _root_logger.handlers):
-    _root_logger.addHandler(_handler)
-_root_logger.setLevel(_log_level)
+log_level = logging.DEBUG if os.getenv("DEBUG", "false").lower() == "true" else logging.INFO
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)d %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(log_level)
 
 if os.getenv("DEBUG", "false").lower() == "true":
     # logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -28,7 +28,6 @@ if os.getenv("DEBUG", "false").lower() == "true":
     # http_client.HTTPConnection.debuglevel = 1
     pass
 
-logger = logging.getLogger(__name__)
 
 def local_source_blob_container_target() -> None:
     """

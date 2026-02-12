@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import quote
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("azblobsync")
 
 def get_blob_service_client(
     account_url: str, credential: Optional[object] = None
@@ -382,7 +382,6 @@ def copy_blobs(
 
             # Upload to target
             tgt_blob_client.upload_blob(
-                name=name,
                 data=data,
                 overwrite=overwrite,
                 metadata=metadata,
