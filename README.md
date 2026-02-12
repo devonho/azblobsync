@@ -57,6 +57,28 @@ LOOP_START_DAY_OF_WEEK=mon
 LOOP_START_TIME_OF_DAY=02:30
 ```
 
+## Running in Azure Container Apps (RBAC)
+
+If you deploy this tool in Azure Container Apps and use the System Assigned Managed Identity provided to the Container App, assign these built-in Azure RBAC roles to that identity so it can pull the container image and access blobs:
+
+- AcrPull — grant on the Azure Container Registry resource (allows the Container App to pull the container image).
+- Storage Blob Data Reader — grant on the source storage account or container (read/list permissions for source blobs).
+- Storage Blob Data Contributor — grant on the target storage account or container (create/write/delete permissions for target blobs).
+
+Optional/alternative:
+- Storage Blob Data Owner — grants full data-plane control; use only if broader privileges are required.
+
+Notes and best practices:
+- Grant the roles at the smallest practical scope (prefer container-level or storage-account-level rather than subscription-level).
+- If you prefer not to use Managed Identity, you can supply account keys (via `SOURCE_AZURE_STORAGE_CONTAINER_KEY` / `TARGET_AZURE_STORAGE_CONTAINER_KEY`) or a SAS token; those options do not require RBAC assignments but require secure secret handling.
+- To assign a role via CLI, use a command like:
+
+```
+az role assignment create --assignee <principalId> --role AcrPull --scope /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ContainerRegistry/registries/<acrName>
+```
+
+Replace `AcrPull` with the appropriate role and change the `--scope` to the storage account or container resource as needed.
+
 Notes
 
 - The main sync wrapper is `blob_container_source_blob_container_target_main()` in `src/main.py`. It reads environment variables (or accepts programmatic overrides) and performs compare/copy/delete actions.
