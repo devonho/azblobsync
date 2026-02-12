@@ -90,10 +90,15 @@ def local_source_blob_container_target() -> None:
         metadata_url_base=os.environ["METADATA_URL_BASE"]
     )
 
-def blob_container_source_blob_container_target_main() -> None:
+def blob_container_source_blob_container_target_main(delete_extraneous: bool | None = None) -> None:
     """
     Wrapper to synchronize blobs between two blob containers (possibly in
     different storage accounts) using environment variables and managed identity.
+
+    Args:
+        delete_extraneous: Optional override to control whether blobs present
+            in the target but not in the source should be deleted. If None,
+            the value of the environment variable DELETE_EXTRANEOUS is used.
 
     Environment variables used (with fallbacks):
     - SOURCE_AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT_URL
@@ -102,7 +107,8 @@ def blob_container_source_blob_container_target_main() -> None:
     - TARGET_AZURE_STORAGE_CONTAINER_NAME or AZURE_STORAGE_CONTAINER_NAME
     - SYNC_PREFIX (optional): prefix to limit sync
     - OVERWRITE_UPDATES (optional): 'true'/'false' (default 'true')
-    - DELETE_EXTRANEOUS (optional): 'true'/'false' (default 'false')
+    - DELETE_EXTRANEOUS (optional): 'true'/'false' (default 'false') unless
+      overridden by the `delete_extraneous` argument.
 
     The function prints a summary of actions or errors.
     """
@@ -173,6 +179,9 @@ def blob_container_source_blob_container_target_main() -> None:
 
     deleted = []
     delete_errors = {}
+    # Allow function parameter to override environment variable
+    if delete_extraneous is None:
+        delete_extraneous = os.environ.get("DELETE_EXTRANEOUS", "false").lower() == "true"
     if delete_extraneous and to_delete:
         tgt_client = get_container_client(tgt_url, tgt_container, tgt_cred)
         for name in to_delete:
