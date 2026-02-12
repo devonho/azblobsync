@@ -275,8 +275,7 @@ def compare_containers(
 
     summary = {"create": len(to_create), "update": len(to_update), "delete": len(to_delete)}
 
-    if verbose:
-        logger.info("Comparison summary for prefix='%s': %s", prefix, summary)
+    logger.info("Comparison summary for prefix='%s': %s", prefix, summary)
 
     return {"to_create": to_create, "to_update": to_update, "to_delete": to_delete, "summary": summary}
 
@@ -335,8 +334,7 @@ def copy_blobs(
 
     for name in names:
         try:
-            if verbose:
-                logger.info("Processing blob: %s", name)
+            logger.info("Processing blob: %s", name)
 
             tgt_blob_client = tgt_container.get_blob_client(name)
 
@@ -344,8 +342,7 @@ def copy_blobs(
             if not overwrite:
                 try:
                     tgt_blob_client.get_blob_properties()
-                    if verbose:
-                        logger.info("Skipping existing blob (overwrite=False): %s", name)
+                    logger.info("Skipping existing blob (overwrite=False): %s", name)
                     skipped.append(name)
                     continue
                 except Exception:
@@ -359,12 +356,10 @@ def copy_blobs(
                     try:
                         create_folder_from_path(target_account_url, target_container_name, parent, target_credential)
                         created_parents.add(parent)
-                        if verbose:
-                            logger.info("Created parent placeholder for: %s", parent)
+                        logger.info("Created parent placeholder for: %s", parent)
                     except Exception as e:
                         # Non-fatal: continue and attempt the blob copy
-                        if verbose:
-                            logger.warning("Warning: failed to create parent placeholder '%s': %s", parent, e)
+                        logger.warning("Warning: failed to create parent placeholder '%s': %s", parent, e)
 
             # Download from source and upload to target
             src_blob_client = src_container.get_blob_client(name)
@@ -389,13 +384,11 @@ def copy_blobs(
             )
 
             copied.append(name)
-            if verbose:
-                logger.info("Copied blob: %s", name)
+            logger.info("Copied blob: %s", name)
 
         except Exception as e:
             errors[name] = str(e)
-            if verbose:
-                logger.error("Error copying %s: %s", name, e)
+            logger.error("Error copying %s: %s", name, e)
 
     summary = {"copied": len(copied), "skipped": len(skipped), "errors": len(errors)}
 
@@ -440,18 +433,15 @@ def remove_placeholder_files(
             if blob.name.endswith('/.placeholder') or blob.name.endswith('.placeholder'):
                 if dry_run:
                     removed.append(blob.name)
-                    if verbose:
-                        logger.info("Dry-run: would remove placeholder: %s", blob.name)
+                    logger.info("Dry-run: would remove placeholder: %s", blob.name)
                 else:
                     try:
                         container.delete_blob(blob.name)
                         removed.append(blob.name)
-                        if verbose:
-                            logger.info("Removed placeholder: %s", blob.name)
+                        logger.info("Removed placeholder: %s", blob.name)
                     except Exception as e:
                         errors[blob.name] = str(e)
-                        if verbose:
-                            logger.error("Error deleting placeholder %s: %s", blob.name, e)
+                        logger.error("Error deleting placeholder %s: %s", blob.name, e)
     except Exception as e:
         raise RuntimeError(f"Failed listing blobs in container: {e}")
 

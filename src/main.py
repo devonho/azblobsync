@@ -138,8 +138,7 @@ def blob_container_source_blob_container_target_main() -> None:
     to_update = comp.get("to_update", [])
     to_delete = comp.get("to_delete", [])
 
-    if verbose:
-        logger.info("Compare result: create=%d update=%d delete=%d", len(to_create), len(to_update), len(to_delete))
+    logger.info("Compare result: create=%d update=%d delete=%d", len(to_create), len(to_update), len(to_delete))
 
     copy_create_result = None
     copy_update_result = None
@@ -193,8 +192,7 @@ def blob_container_source_blob_container_target_main() -> None:
             dry_run=False,
             verbose=verbose,
         )
-        if verbose:
-            logger.info("Removed placeholders: %s", remove_result.get('summary', {}))
+        logger.info("Removed placeholders: %s", remove_result.get('summary', {}))
     except Exception as e:
         # Non-fatal: report and continue
         logger.warning("Warning: failed to remove placeholder files: %s", e)
