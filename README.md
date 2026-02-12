@@ -8,8 +8,10 @@ Environment variables used by the project.
 | AZURE_STORAGE_CONTAINER_NAME | Conditional | - | Container name used as a fallback for uploads when `SOURCE_`/`TARGET_` are not provided. |
 | SOURCE_AZURE_STORAGE_ACCOUNT_URL | Optional | - | Overrides `AZURE_STORAGE_ACCOUNT_URL` for the source container when doing container-to-container sync. |
 | SOURCE_AZURE_STORAGE_CONTAINER_NAME | Optional | - | Overrides `AZURE_STORAGE_CONTAINER_NAME` for the source container. |
+| SOURCE_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the source account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
 | TARGET_AZURE_STORAGE_ACCOUNT_URL | Optional | - | Overrides `AZURE_STORAGE_ACCOUNT_URL` for the target container. |
 | TARGET_AZURE_STORAGE_CONTAINER_NAME | Optional | - | Overrides `AZURE_STORAGE_CONTAINER_NAME` for the target container. |
+| TARGET_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the target account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
 | SYNC_PREFIX | Optional | - | If set, limits listing/comparison/copy to blobs whose names start with this prefix. |
 | OVERWRITE_UPDATES | Optional | `true` | When `true`, blobs detected as "updates" will overwrite target blobs. When `false`, update candidates are skipped. |
 | DELETE_EXTRANEOUS | Optional | `false` | When `true`, blobs that exist in the target but not in the source are deleted during sync (can also be passed programmatically). |
@@ -18,7 +20,9 @@ Environment variables used by the project.
 
 Authentication / Credentials
 
-The code uses Azure Identity (e.g. `ManagedIdentityCredential`, `DefaultAzureCredential`). Ensure the identity used to run the tool has appropriate permissions on source and target storage accounts (List/Get for source; Create/Write/Delete for target as needed).
+The code uses Azure Identity by default (e.g. `ManagedIdentityCredential`, `DefaultAzureCredential`). If you provide the storage account key via `SOURCE_AZURE_STORAGE_CONTAINER_KEY` or `TARGET_AZURE_STORAGE_CONTAINER_KEY`, the tool will prefer a named/key credential constructed from that key for the corresponding account. If a provided key cannot be parsed into an account name or is not present, the code falls back to `ManagedIdentityCredential()`.
+
+Ensure the identity used to run the tool has appropriate permissions on source and target storage accounts (List/Get for source; Create/Write/Delete for target as needed).
 
 Example `.env` snippet
 
@@ -32,6 +36,10 @@ SOURCE_AZURE_STORAGE_ACCOUNT_URL=https://srcaccount.blob.core.windows.net
 SOURCE_AZURE_STORAGE_CONTAINER_NAME=src-container
 TARGET_AZURE_STORAGE_ACCOUNT_URL=https://tgtaccount.blob.core.windows.net
 TARGET_AZURE_STORAGE_CONTAINER_NAME=tgt-container
+
+# optional storage account keys (if you want key-based auth instead of managed identity)
+SOURCE_AZURE_STORAGE_CONTAINER_KEY=VBh...your_source_account_key...
+TARGET_AZURE_STORAGE_CONTAINER_KEY=Q2F...your_target_account_key...
 
 # behavior
 SYNC_PREFIX=some/path/
