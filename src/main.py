@@ -8,6 +8,8 @@ from blobhelper import create_folder_structure, upload_files_from_list, compare_
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedIdentityCredential
 from azure.storage.blob import StorageSharedKeyCredential
 from urllib.parse import urlparse
+import time
+from datetime import datetime, timedelta
 
 # Prefer AzureNamedKeyCredential if available (newer API); otherwise use StorageSharedKeyCredential
 try:
@@ -251,8 +253,123 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
     return {"comparison": comp, "copy_create": copy_create_result, "copy_update": copy_update_result, "deleted": deleted, "delete_errors": delete_errors, "summary": summary}
 
 def main() -> None:
-    blob_container_source_blob_container_target_main()
-    pass
+    """
+    Run sync once or in a scheduling loop controlled by LOOP_INTERVAL_MINUTES.
+
+    If environment variable `LOOP_INTERVAL_MINUTES` is set to a positive number,
+    the function will run `blob_container_source_blob_container_target_main()` repeatedly
+    every N minutes until interrupted. If not set or set to 0, a single run is executed.
+
+    If LOOP_START_DAY_OF_WEEK or LOOP_START_TIME_OF_DAY are set, the first scheduled
+    run will be delayed until the next occurrence matching the configured day and time.
+    """
+    interval_env = os.environ.get("LOOP_INTERVAL_MINUTES")
+    interval_minutes = 0.0
+    if interval_env:
+        try:
+            interval_minutes = float(interval_env)
+        except Exception:
+            logger.warning("Invalid LOOP_INTERVAL_MINUTES value '%s', defaulting to single run", interval_env)
+            interval_minutes = 0.0
+
+    # Optional scheduled start constraints
+    start_day_env = os.environ.get("LOOP_START_DAY_OF_WEEK")  # e.g. 'mon', 'monday', '0' (Mon=0)
+    start_time_env = os.environ.get("LOOP_START_TIME_OF_DAY")  # e.g. '14:30' (24h HH:MM)
+
+    def _parse_weekday(val: str):
+        if not val:
+            return None
+        val = val.strip().lower()
+        weekdays = {
+            'monday': 0, 'mon': 0,
+            'tuesday': 1, 'tue': 1, 'tues': 1,
+            'wednesday': 2, 'wed': 2,
+            'thursday': 3, 'thu': 3, 'thurs': 3,
+            'friday': 4, 'fri': 4,
+            'saturday': 5, 'sat': 5,
+            'sunday': 6, 'sun': 6,
+        }
+        if val in weekdays:
+            return weekdays[val]
+        try:
+            n = int(val)
+            if 0 <= n <= 6:
+                return n
+        except Exception:
+            pass
+        logger.warning("Unrecognized LOOP_START_DAY_OF_WEEK value: '%s'", val)
+        return None
+
+    def _parse_time_of_day(val: str):
+        if not val:
+            return None
+        try:
+            parts = val.strip().split(":")
+            if len(parts) != 2:
+                raise ValueError()
+            hh = int(parts[0])
+            mm = int(parts[1])
+            if not (0 <= hh < 24 and 0 <= mm < 60):
+                raise ValueError()
+            return hh, mm
+        except Exception:
+            logger.warning("Unrecognized LOOP_START_TIME_OF_DAY value: '%s' (expected HH:MM 24h)", val)
+            return None
+
+    start_weekday = _parse_weekday(start_day_env)
+    start_time_hm = _parse_time_of_day(start_time_env)
+
+    if interval_minutes > 0:
+        # If a constrained start is configured, compute wait until that start
+        if start_weekday is not None or start_time_hm is not None:
+            now = datetime.now()
+            target_hhmm = start_time_hm if start_time_hm is not None else (now.hour, now.minute)
+            # compute candidate day
+            if start_weekday is None:
+                # only time specified: next occurrence of that time (today if future else tomorrow)
+                candidate = now.replace(hour=target_hhmm[0], minute=target_hhmm[1], second=0, microsecond=0)
+                if candidate <= now:
+                    candidate = candidate + timedelta(days=1)
+            else:
+                # weekday specified (possibly with time)
+                days_ahead = (start_weekday - now.weekday()) % 7
+                candidate = (now + timedelta(days=days_ahead)).replace(hour=target_hhmm[0], minute=target_hhmm[1], second=0, microsecond=0)
+                if candidate <= now:
+                    candidate = candidate + timedelta(days=7)
+
+            wait_seconds = (candidate - now).total_seconds()
+            if wait_seconds > 0:
+                logger.info("Delaying scheduler start until %s (in %.1f seconds)", candidate.isoformat(sep=' '), wait_seconds)
+                try:
+                    time.sleep(wait_seconds)
+                except KeyboardInterrupt:
+                    logger.info("Startup wait interrupted by user, exiting")
+                    return
+
+        interval_seconds = interval_minutes * 60.0
+        logger.info("Starting scheduler: running sync every %s minutes", interval_minutes)
+        try:
+            while True:
+                logger.info("Scheduled run: starting sync")
+                try:
+                    blob_container_source_blob_container_target_main()
+                except Exception:
+                    logger.exception("Scheduled sync run failed")
+                logger.info("Scheduled run: sleeping for %s minutes", interval_minutes)
+                try:
+                    time.sleep(interval_seconds)
+                except KeyboardInterrupt:
+                    logger.info("Scheduler interrupted by user, exiting")
+                    break
+        except KeyboardInterrupt:
+            logger.info("Scheduler interrupted by user, exiting")
+    else:
+        logger.info("Running single sync invocation")
+        try:
+            blob_container_source_blob_container_target_main()
+        except Exception:
+            logger.exception("Sync failed")
+            raise
 
 if __name__ == "__main__":
     main()

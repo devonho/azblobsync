@@ -17,6 +17,9 @@ Environment variables used by the project.
 | DELETE_EXTRANEOUS | Optional | `false` | When `true`, blobs that exist in the target but not in the source are deleted during sync (can also be passed programmatically). |
 | METADATA_URL_BASE | Optional | - | Base URL used by `upload_files_from_list` to populate a `url` metadata entry for uploaded blobs. |
 | DEBUG | Optional | `false` | When `true` enables DEBUG logging and more verbose output format. |
+| LOOP_INTERVAL_MINUTES | Optional | `0` | If > 0, the sync runs repeatedly every N minutes. If 0 or unset the tool runs a single sync and exits. |
+| LOOP_START_DAY_OF_WEEK | Optional | - | If set, the scheduler will wait until the next occurrence of this weekday before starting repeated runs. Accepts weekday names/abbreviations (e.g. `mon`, `monday`) or 0..6 (Mon=0). |
+| LOOP_START_TIME_OF_DAY | Optional | - | If set, the scheduler will wait until this time of day (24-hour `HH:MM`) before starting the first scheduled run. |
 
 Authentication / Credentials
 
@@ -47,6 +50,11 @@ OVERWRITE_UPDATES=true
 DELETE_EXTRANEOUS=false
 METADATA_URL_BASE=https://example.com/metadata
 DEBUG=false
+
+# scheduler (optional)
+LOOP_INTERVAL_MINUTES=15
+LOOP_START_DAY_OF_WEEK=mon
+LOOP_START_TIME_OF_DAY=02:30
 ```
 
 Notes
