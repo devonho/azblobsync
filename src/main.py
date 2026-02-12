@@ -10,11 +10,12 @@ from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedId
 load_dotenv()
 
 if os.getenv("DEBUG", "false").lower() == "true":
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-    logging.getLogger("urllib3").setLevel(logging.DEBUG)
-    requests_log = logging.getLogger("requests.packages.urllib3").setLevel(logging.DEBUG)
-    import http.client as http_client
-    http_client.HTTPConnection.debuglevel = 1
+    # logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    # logging.getLogger("urllib3").setLevel(logging.DEBUG)
+    # requests_log = logging.getLogger("requests.packages.urllib3").setLevel(logging.DEBUG)
+    # import http.client as http_client
+    # http_client.HTTPConnection.debuglevel = 1
+    pass
 
 def local_source_blob_container_target() -> None:
     """
@@ -198,6 +199,7 @@ def blob_container_source_blob_container_target_main() -> None:
     return {"comparison": comp, "copy_create": copy_create_result, "copy_update": copy_update_result, "deleted": deleted, "delete_errors": delete_errors, "summary": summary}
 
 def main() -> None:
+    blob_container_source_blob_container_target_main()
     pass
 
 if __name__ == "__main__":
