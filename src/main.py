@@ -9,6 +9,17 @@ from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedId
 
 load_dotenv()
 
+# Configure a root logging handler with timestamp and file information
+_log_level = logging.DEBUG if os.getenv("DEBUG", "false").lower() == "true" else logging.INFO
+_handler = logging.StreamHandler(sys.stdout)
+_formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)d %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+_handler.setFormatter(_formatter)
+_root_logger = logging.getLogger()
+# Avoid adding duplicate handlers if this module is reloaded
+if not any(isinstance(h, logging.StreamHandler) and h.stream is sys.stdout for h in _root_logger.handlers):
+    _root_logger.addHandler(_handler)
+_root_logger.setLevel(_log_level)
+
 if os.getenv("DEBUG", "false").lower() == "true":
     # logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     # logging.getLogger("urllib3").setLevel(logging.DEBUG)
@@ -16,6 +27,8 @@ if os.getenv("DEBUG", "false").lower() == "true":
     # import http.client as http_client
     # http_client.HTTPConnection.debuglevel = 1
     pass
+
+logger = logging.getLogger(__name__)
 
 def local_source_blob_container_target() -> None:
     """
@@ -127,7 +140,7 @@ def blob_container_source_blob_container_target_main() -> None:
     to_delete = comp.get("to_delete", [])
 
     if verbose:
-        print(f"Compare result: create={len(to_create)} update={len(to_update)} delete={len(to_delete)}")
+        logger.info("Compare result: create=%d update=%d delete=%d", len(to_create), len(to_update), len(to_delete))
 
     copy_create_result = None
     copy_update_result = None
@@ -182,10 +195,10 @@ def blob_container_source_blob_container_target_main() -> None:
             verbose=verbose,
         )
         if verbose:
-            print(f"Removed placeholders: {remove_result.get('summary', {})}")
+            logger.info("Removed placeholders: %s", remove_result.get('summary', {}))
     except Exception as e:
         # Non-fatal: report and continue
-        print(f"Warning: failed to remove placeholder files: {e}")
+        logger.warning("Warning: failed to remove placeholder files: %s", e)
 
     summary = {
         "compare": comp.get("summary", {}),
@@ -195,7 +208,7 @@ def blob_container_source_blob_container_target_main() -> None:
         "delete_errors": len(delete_errors),
     }
 
-    print("Sync result summary:", summary)
+    logger.info("Sync result summary: %s", summary)
     return {"comparison": comp, "copy_create": copy_create_result, "copy_update": copy_update_result, "deleted": deleted, "delete_errors": delete_errors, "summary": summary}
 
 def main() -> None:
@@ -203,4 +216,4 @@ def main() -> None:
     pass
 
 if __name__ == "__main__":
-	main()
+    main()

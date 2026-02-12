@@ -3,6 +3,9 @@ from azure.identity import DefaultAzureCredential
 from typing import Optional
 from pathlib import Path
 from urllib.parse import quote
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_blob_service_client(
     account_url: str, credential: Optional[object] = None
@@ -66,9 +69,9 @@ def create_folder_structure(
         
         try:
             container_client.upload_blob(name=blob_name, data=b'', overwrite=True)
-            print(f"Created folder structure: {folder_path}")
+            logger.info("Created folder structure: %s", folder_path)
         except Exception as e:
-            print(f"Error creating folder {folder_path}: {e}")
+            logger.error("Error creating folder %s: %s", folder_path, e)
 
 
 def create_folder_from_path(
@@ -146,11 +149,11 @@ def upload_files_from_list(
             local_file = Path(file_path)
             
             if not local_file.exists():
-                print(f"Warning: File not found: {file_path}")
+                logger.warning("Warning: File not found: %s", file_path)
                 continue
             
             if not local_file.is_file():
-                print(f"Warning: Not a file: {file_path}")
+                logger.warning("Warning: Not a file: %s", file_path)
                 continue
             
             # Determine blob name
@@ -175,11 +178,10 @@ def upload_files_from_list(
                     encoding="utf-8",
                     logging_enable=True
                 )
-            #print(f"Uploaded: {file_path} -> {blob_name}")       
-            pass     
+            #logger.info("Uploaded: %s -> %s", file_path, blob_name)
             
         except Exception as e:
-            print(f"Error uploading {file_path}: {e}")
+            logger.error("Error uploading %s: %s", file_path, e)
 
 
 def compare_containers(
@@ -274,7 +276,7 @@ def compare_containers(
     summary = {"create": len(to_create), "update": len(to_update), "delete": len(to_delete)}
 
     if verbose:
-        print(f"Comparison summary for prefix='{prefix}': {summary}")
+        logger.info("Comparison summary for prefix='%s': %s", prefix, summary)
 
     return {"to_create": to_create, "to_update": to_update, "to_delete": to_delete, "summary": summary}
 
@@ -334,7 +336,7 @@ def copy_blobs(
     for name in names:
         try:
             if verbose:
-                print(f"Processing blob: {name}")
+                logger.info("Processing blob: %s", name)
 
             tgt_blob_client = tgt_container.get_blob_client(name)
 
@@ -343,7 +345,7 @@ def copy_blobs(
                 try:
                     tgt_blob_client.get_blob_properties()
                     if verbose:
-                        print(f"Skipping existing blob (overwrite=False): {name}")
+                        logger.info("Skipping existing blob (overwrite=False): %s", name)
                     skipped.append(name)
                     continue
                 except Exception:
@@ -358,11 +360,11 @@ def copy_blobs(
                         create_folder_from_path(target_account_url, target_container_name, parent, target_credential)
                         created_parents.add(parent)
                         if verbose:
-                            print(f"Created parent placeholder for: {parent}")
+                            logger.info("Created parent placeholder for: %s", parent)
                     except Exception as e:
                         # Non-fatal: continue and attempt the blob copy
                         if verbose:
-                            print(f"Warning: failed to create parent placeholder '{parent}': {e}")
+                            logger.warning("Warning: failed to create parent placeholder '%s': %s", parent, e)
 
             # Download from source and upload to target
             src_blob_client = src_container.get_blob_client(name)
@@ -380,6 +382,7 @@ def copy_blobs(
 
             # Upload to target
             tgt_blob_client.upload_blob(
+                name=name,
                 data=data,
                 overwrite=overwrite,
                 metadata=metadata,
@@ -388,12 +391,12 @@ def copy_blobs(
 
             copied.append(name)
             if verbose:
-                print(f"Copied blob: {name}")
+                logger.info("Copied blob: %s", name)
 
         except Exception as e:
             errors[name] = str(e)
             if verbose:
-                print(f"Error copying {name}: {e}")
+                logger.error("Error copying %s: %s", name, e)
 
     summary = {"copied": len(copied), "skipped": len(skipped), "errors": len(errors)}
 
@@ -439,17 +442,17 @@ def remove_placeholder_files(
                 if dry_run:
                     removed.append(blob.name)
                     if verbose:
-                        print(f"Dry-run: would remove placeholder: {blob.name}")
+                        logger.info("Dry-run: would remove placeholder: %s", blob.name)
                 else:
                     try:
                         container.delete_blob(blob.name)
                         removed.append(blob.name)
                         if verbose:
-                            print(f"Removed placeholder: {blob.name}")
+                            logger.info("Removed placeholder: %s", blob.name)
                     except Exception as e:
                         errors[blob.name] = str(e)
                         if verbose:
-                            print(f"Error deleting placeholder {blob.name}: {e}")
+                            logger.error("Error deleting placeholder %s: %s", blob.name, e)
     except Exception as e:
         raise RuntimeError(f"Failed listing blobs in container: {e}")
 
