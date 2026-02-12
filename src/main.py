@@ -6,21 +6,10 @@ from dotenv import load_dotenv
 from bfs import get_folders_and_files
 from blobhelper import create_folder_structure, upload_files_from_list, compare_containers, copy_blobs, get_container_client, remove_placeholder_files
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedIdentityCredential
-from azure.storage.blob import StorageSharedKeyCredential
+from azure.core.credentials import AzureNamedKeyCredential
 from urllib.parse import urlparse
 import time
 from datetime import datetime, timedelta
-
-# Prefer AzureNamedKeyCredential if available (newer API); otherwise use StorageSharedKeyCredential
-try:
-    from azure.core.credentials import AzureNamedKeyCredential as _AzureNamedKeyCredential
-    _NAMED_KEY_CLS = _AzureNamedKeyCredential
-except Exception:
-    try:
-        from azure.storage.blob import StorageSharedKeyCredential as _StorageKeyCred
-        _NAMED_KEY_CLS = _StorageKeyCred
-    except Exception:
-        _NAMED_KEY_CLS = None
 
 load_dotenv()
 
@@ -144,7 +133,7 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
     tgt_cred = None
 
     def _build_credential_from_env(key_env: str, account_url: str):
-        """Return StorageSharedKeyCredential if env key present, else ManagedIdentityCredential()."""
+        """Return AzureNamedKeyCredential if env key present, else ManagedIdentityCredential()."""
         key = os.environ.get(key_env)
         if key:
             try:
@@ -156,8 +145,8 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
             if not account_name:
                 logger.warning("Could not parse account name from URL '%s', falling back to ManagedIdentityCredential", account_url)
                 return ManagedIdentityCredential()
-            logger.info("Using StorageSharedKeyCredential for account '%s' from env %s", account_name, key_env)
-            return StorageSharedKeyCredential(account_name, key)
+            logger.info("Using AzureNamedKeyCredential for account '%s' from env %s", account_name, key_env)
+            return AzureNamedKeyCredential(account_name, key)
         return ManagedIdentityCredential()
 
     src_cred = _build_credential_from_env("SOURCE_AZURE_STORAGE_CONTAINER_KEY", src_url)
