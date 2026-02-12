@@ -67,6 +67,7 @@ If you deploy this tool in Azure Container Apps and use the System Assigned Mana
 
 Optional/alternative:
 - Storage Blob Data Owner — grants full data-plane control; use only if broader privileges are required.
+- Container Apps Contributor — grant on the deploying VM's system-assigned MSI to enable streaming of logs.
 
 Notes and best practices:
 - Grant the roles at the smallest practical scope (prefer container-level or storage-account-level rather than subscription-level).
