@@ -168,7 +168,7 @@ def local_source_blob_container_target() -> dict:
             logger.exception("Failed to delete extraneous blobs: %s", e)
     else:
         if to_delete:
-            logger.info("SKIP_DELETE is false: skipping deletion of %d extraneous target blobs", len(to_delete))
+            logger.info("SKIP_DELETE is true: skipping deletion of %d extraneous target blobs", len(to_delete))
 
     result = {
         "comparison": comp,
