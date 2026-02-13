@@ -231,6 +231,14 @@ def compare_containers(
     tgt_blobs: dict[str, object] = {}
     try:
         for blob in tgt_client.list_blobs(name_starts_with=prefix):
+            # Skip tombstoned / deleted entries if present in the listing metadata
+            if getattr(blob, "deleted", False):
+                logger.debug("Skipping deleted blob in target listing: %s", getattr(blob, "name", "<unknown>"))
+                continue
+            # Skip placeholder blobs used to represent folders
+            if getattr(blob, "name", "").endswith('/.placeholder') or getattr(blob, "name", "").endswith('.placeholder'):
+                logger.debug("Skipping placeholder blob in target listing: %s", blob.name)
+                continue
             tgt_blobs[blob.name] = blob
     except Exception as e:
         raise RuntimeError(f"Failed to list blobs in target container: {e}")
