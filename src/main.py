@@ -267,6 +267,7 @@ def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = 
             logger.info("SKIP_COPY=true: skipping %d create candidates", len(skipped_by_skip_copy))
             to_create = []
 
+    copy_create_result = None
     if to_create:
         copy_create_result = copy_blobs(
             src_url,
@@ -281,7 +282,8 @@ def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = 
             verbose=verbose,
         )
 
-    if to_update:
+    copy_update_result = None
+    if not SKIP_UPDATES and to_update:
         copy_update_result = copy_blobs(
             src_url,
             src_container,
