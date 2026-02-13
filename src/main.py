@@ -152,7 +152,7 @@ def local_source_blob_container_target() -> dict:
     deleted = []
     delete_errors = {}
     SKIP_DELETE = os.environ.get("SKIP_DELETE", "true").lower() == "true"
-    if SKIP_DELETE and to_delete:
+    if (SKIP_DELETE == False) and to_delete:
         try:
             tgt_client = get_container_client(target_account_url, target_container, target_cred)
             for name in to_delete:
@@ -300,7 +300,7 @@ def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = 
     # Allow function parameter to override environment variable
     if SKIP_DELETE is None:
         SKIP_DELETE = os.environ.get("SKIP_DELETE", "true").lower() == "true"
-    if SKIP_DELETE and to_delete:
+    if (SKIP_DELETE == False) and to_delete:
         tgt_client = get_container_client(tgt_url, tgt_container, tgt_cred)
         for name in to_delete:
             try:
