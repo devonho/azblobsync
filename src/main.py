@@ -112,20 +112,20 @@ def local_source_blob_container_target() -> dict:
     skipped_by_skip_copy = []
 
     # If SKIP_COPY is set to 'true', skip uploading all create candidates
-    if os.environ.get("SKIP_COPY", "false").lower() == "true":
+    if os.environ.get("SKIP_COPY", "true").lower() == "true":
         if to_create:
             skipped_by_skip_copy = list(to_create)
             logger.info("SKIP_COPY=true: skipping %d create candidates", len(skipped_by_skip_copy))
             to_create = []
 
-    # Respect OVERWRITE_UPDATES env var: when false, do not upload update candidates
-    overwrite_updates = os.environ.get("OVERWRITE_UPDATES", "true").lower() == "true"
-    if not overwrite_updates and to_update:
+    # Respect SKIP_UPDATES env var: when false, do not upload update candidates
+    SKIP_UPDATES = os.environ.get("SKIP_UPDATES", "true").lower() == "true"
+    if not SKIP_UPDATES and to_update:
         skipped_updates = list(to_update)
-        logger.info("OVERWRITE_UPDATES=false: skipping %d update candidates", len(skipped_updates))
+        logger.info("SKIP_UPDATES=false: skipping %d update candidates", len(skipped_updates))
 
     # Upload files that need to be created or updated (depending on overwrite flag)
-    names_to_upload = to_create + (to_update if overwrite_updates else [])
+    names_to_upload = to_create + (to_update if SKIP_UPDATES else [])
     if names_to_upload:
         file_paths = []
         for name in names_to_upload:
@@ -151,8 +151,8 @@ def local_source_blob_container_target() -> dict:
     # Handle deletions: if configured, remove blobs present in the target but missing locally
     deleted = []
     delete_errors = {}
-    delete_extraneous = os.environ.get("DELETE_EXTRANEOUS", "false").lower() == "true"
-    if delete_extraneous and to_delete:
+    SKIP_DELETE = os.environ.get("SKIP_DELETE", "true").lower() == "true"
+    if SKIP_DELETE and to_delete:
         try:
             tgt_client = get_container_client(target_account_url, target_container, target_cred)
             for name in to_delete:
@@ -168,7 +168,7 @@ def local_source_blob_container_target() -> dict:
             logger.exception("Failed to delete extraneous blobs: %s", e)
     else:
         if to_delete:
-            logger.info("DELETE_EXTRANEOUS is false: skipping deletion of %d extraneous target blobs", len(to_delete))
+            logger.info("SKIP_DELETE is false: skipping deletion of %d extraneous target blobs", len(to_delete))
 
     result = {
         "comparison": comp,
@@ -183,15 +183,15 @@ def local_source_blob_container_target() -> dict:
 
     return result
 
-def blob_container_source_blob_container_target_main(delete_extraneous: bool | None = None) -> None:
+def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = None) -> None:
     """
     Wrapper to synchronize blobs between two blob containers (possibly in
     different storage accounts) using environment variables and managed identity.
 
     Args:
-        delete_extraneous: Optional override to control whether blobs present
+        SKIP_DELETE: Optional override to control whether blobs present
             in the target but not in the source should be deleted. If None,
-            the value of the environment variable DELETE_EXTRANEOUS is used.
+            the value of the environment variable SKIP_DELETE is used.
 
     Environment variables used (with fallbacks):
     - SOURCE_AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT_URL
@@ -199,9 +199,9 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
     - TARGET_AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT_URL
     - TARGET_AZURE_STORAGE_CONTAINER_NAME or AZURE_STORAGE_CONTAINER_NAME
     - SYNC_PREFIX (optional): prefix to limit sync
-    - OVERWRITE_UPDATES (optional): 'true'/'false' (default 'true')
-    - DELETE_EXTRANEOUS (optional): 'true'/'false' (default 'false') unless
-      overridden by the `delete_extraneous` argument.
+    - SKIP_UPDATES (optional): 'true'/'false' (default 'true')
+    - SKIP_DELETE (optional): 'true'/'false' (default 'false') unless
+      overridden by the `SKIP_DELETE` argument.
 
     The function prints a summary of actions or errors.
     """
@@ -214,8 +214,8 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
         raise KeyError("Missing required environment variables for source/target account or container names")
 
     prefix = os.environ.get("SYNC_PREFIX")
-    overwrite_updates = os.environ.get("OVERWRITE_UPDATES", "true").lower() == "true"
-    delete_extraneous = os.environ.get("DELETE_EXTRANEOUS", "false").lower() == "true"
+    SKIP_UPDATES = os.environ.get("SKIP_UPDATES", "true").lower() == "true"
+    SKIP_DELETE = os.environ.get("SKIP_DELETE", "true").lower() == "true"
     verbose = os.environ.get("DEBUG", "false").lower() == "true"
 
     src_cred = None
@@ -261,7 +261,7 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
 
     # Support SKIP_COPY env var: when true skip creating new blobs (to_create)
     skipped_by_skip_copy = []
-    if os.environ.get("SKIP_COPY", "false").lower() == "true":
+    if os.environ.get("SKIP_COPY", "true").lower() == "true":
         if to_create:
             skipped_by_skip_copy = list(to_create)
             logger.info("SKIP_COPY=true: skipping %d create candidates", len(skipped_by_skip_copy))
@@ -290,7 +290,7 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
             blob_names=to_update,
             source_credential=src_cred,
             target_credential=tgt_cred,
-            overwrite=bool(overwrite_updates),
+            overwrite=bool(SKIP_UPDATES),
             create_folders=True,
             verbose=verbose,
         )
@@ -298,9 +298,9 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
     deleted = []
     delete_errors = {}
     # Allow function parameter to override environment variable
-    if delete_extraneous is None:
-        delete_extraneous = os.environ.get("DELETE_EXTRANEOUS", "false").lower() == "true"
-    if delete_extraneous and to_delete:
+    if SKIP_DELETE is None:
+        SKIP_DELETE = os.environ.get("SKIP_DELETE", "true").lower() == "true"
+    if SKIP_DELETE and to_delete:
         tgt_client = get_container_client(tgt_url, tgt_container, tgt_cred)
         for name in to_delete:
             try:

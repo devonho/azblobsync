@@ -4,9 +4,11 @@ Environment variables used by the project.
 
 | Variable | Required | Default | Description |
 |---|:---:|---|---|
+| DEBUG | Optional | `false` | When `true` enables DEBUG logging and more verbose output format. |
 | AZURE_STORAGE_ACCOUNT_URL | Conditional | - | Account URL for Azure Storage (e.g. `https://myaccount.blob.core.windows.net`). Used as a fallback if `SOURCE_`/`TARGET_` variables are not provided. |
 | AZURE_STORAGE_CONTAINER_NAME | Conditional | - | Container name used as a fallback for uploads when `SOURCE_`/`TARGET_` are not provided. |
 | LOCAL_CONTAINER_PATH | Optional | - | Local filesystem path to a folder containing files to sync when running in local->container mode. When set, the tool will compare files under this path to the target container and upload missing/updated files. |
+| METADATA_URL_BASE | Optional | - | Base URL used by `upload_files_from_list` to populate a `url` metadata entry for uploaded blobs. |
 | SOURCE_AZURE_STORAGE_ACCOUNT_URL | Optional | - | Overrides `AZURE_STORAGE_ACCOUNT_URL` for the source container when doing container-to-container sync. |
 | SOURCE_AZURE_STORAGE_CONTAINER_NAME | Optional | - | Overrides `AZURE_STORAGE_CONTAINER_NAME` for the source container. |
 | SOURCE_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the source account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
@@ -14,10 +16,9 @@ Environment variables used by the project.
 | TARGET_AZURE_STORAGE_CONTAINER_NAME | Optional | - | Overrides `AZURE_STORAGE_CONTAINER_NAME` for the target container. |
 | TARGET_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the target account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
 | SYNC_PREFIX | Optional | - | If set, limits listing/comparison/copy to blobs whose names start with this prefix. |
-| OVERWRITE_UPDATES | Optional | `true` | When `true`, blobs detected as "updates" will overwrite target blobs. When `false`, update candidates are skipped. |
-| DELETE_EXTRANEOUS | Optional | `false` | When `true`, blobs that exist in the target but not in the source are deleted during sync (can also be passed programmatically). |
-| METADATA_URL_BASE | Optional | - | Base URL used by `upload_files_from_list` to populate a `url` metadata entry for uploaded blobs. |
-| DEBUG | Optional | `false` | When `true` enables DEBUG logging and more verbose output format. |
+| SKIP_UPDATES | Optional | `true` | When `true`, blobs detected as "updates" will overwrite target blobs. When `false`, update candidates are skipped. |
+| SKIP_DELETE | Optional | `true` | When `true`, blobs that exist in the target but not in the source are deleted during sync (can also be passed programmatically). |
+| SKIP_COPY | Optional | `true` | When set to `true`, the sync will skip uploading any files detected as "create" candidates (files present locally but missing in the target). Useful to preview or avoid initial bulk uploads. |
 | LOOP_INTERVAL_MINUTES | Optional | `0` | If > 0, the sync runs repeatedly every N minutes. If 0 or unset the tool runs a single sync and exits. |
 | LOOP_START_DAY_OF_WEEK | Optional | - | If set, the scheduler will wait until the next occurrence of this weekday before starting repeated runs. Accepts weekday names/abbreviations (e.g. `mon`, `monday`) or 0..6 (Mon=0). |
 | LOOP_START_TIME_OF_DAY | Optional | - | If set, the scheduler will wait until this time of day (24-hour `HH:MM`) before starting the first scheduled run. |
@@ -37,6 +38,8 @@ AZURE_STORAGE_CONTAINER_NAME=my-container
 
 # local mode (optional)
 LOCAL_CONTAINER_PATH=/path/to/local/folder
+# if you want to avoid uploading newly discovered files, set SKIP_COPY=true
+SKIP_COPY=false
 
 # explicit per-endpoint overrides (optional)
 SOURCE_AZURE_STORAGE_ACCOUNT_URL=https://srcaccount.blob.core.windows.net
@@ -50,10 +53,11 @@ TARGET_AZURE_STORAGE_CONTAINER_KEY=Q2F...your_target_account_key...
 
 # behavior
 SYNC_PREFIX=some/path/
-OVERWRITE_UPDATES=true
-DELETE_EXTRANEOUS=false
+SKIP_UPDATES=true
+SKIP_DELETE=false
 METADATA_URL_BASE=https://example.com/metadata
 DEBUG=false
+SKIP_COPY=false
 
 # scheduler (optional)
 LOOP_INTERVAL_MINUTES=15
