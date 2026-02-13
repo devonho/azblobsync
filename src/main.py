@@ -140,12 +140,36 @@ def local_source_blob_container_target() -> dict:
             for name in names_to_upload:
                 upload_errors[name] = str(e)
 
+    # Handle deletions: if configured, remove blobs present in the target but missing locally
+    deleted = []
+    delete_errors = {}
+    delete_extraneous = os.environ.get("DELETE_EXTRANEOUS", "false").lower() == "true"
+    if delete_extraneous and to_delete:
+        try:
+            tgt_client = get_container_client(target_account_url, target_container, target_cred)
+            for name in to_delete:
+                try:
+                    tgt_client.delete_blob(name)
+                    deleted.append(name)
+                    logger.info("Deleted target blob not present locally: %s", name)
+                except Exception as e:
+                    delete_errors[name] = str(e)
+                    logger.error("Failed to delete target blob %s: %s", name, e)
+        except Exception as e:
+            # If listing or client creation failed, surface as error
+            logger.exception("Failed to delete extraneous blobs: %s", e)
+    else:
+        if to_delete:
+            logger.info("DELETE_EXTRANEOUS is false: skipping deletion of %d extraneous target blobs", len(to_delete))
+
     result = {
         "comparison": comp,
         "uploaded": uploaded,
         "upload_errors": upload_errors,
         "to_delete": to_delete,
         "skipped_updates": skipped_updates,
+        "deleted": deleted,
+        "delete_errors": delete_errors,
     }
 
     return result
