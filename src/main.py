@@ -109,6 +109,14 @@ def local_source_blob_container_target() -> dict:
     uploaded = []
     upload_errors = {}
     skipped_updates = []
+    skipped_by_skip_copy = []
+
+    # If SKIP_COPY is set to 'true', skip uploading all create candidates
+    if os.environ.get("SKIP_COPY", "false").lower() == "true":
+        if to_create:
+            skipped_by_skip_copy = list(to_create)
+            logger.info("SKIP_COPY=true: skipping %d create candidates", len(skipped_by_skip_copy))
+            to_create = []
 
     # Respect OVERWRITE_UPDATES env var: when false, do not upload update candidates
     overwrite_updates = os.environ.get("OVERWRITE_UPDATES", "true").lower() == "true"
@@ -168,6 +176,7 @@ def local_source_blob_container_target() -> dict:
         "upload_errors": upload_errors,
         "to_delete": to_delete,
         "skipped_updates": skipped_updates,
+        "skipped_by_skip_copy": skipped_by_skip_copy,
         "deleted": deleted,
         "delete_errors": delete_errors,
     }
@@ -250,8 +259,13 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
 
     logger.info("Compare result: create=%d update=%d delete=%d", len(to_create), len(to_update), len(to_delete))
 
-    copy_create_result = None
-    copy_update_result = None
+    # Support SKIP_COPY env var: when true skip creating new blobs (to_create)
+    skipped_by_skip_copy = []
+    if os.environ.get("SKIP_COPY", "false").lower() == "true":
+        if to_create:
+            skipped_by_skip_copy = list(to_create)
+            logger.info("SKIP_COPY=true: skipping %d create candidates", len(skipped_by_skip_copy))
+            to_create = []
 
     if to_create:
         copy_create_result = copy_blobs(
@@ -319,7 +333,7 @@ def blob_container_source_blob_container_target_main(delete_extraneous: bool | N
     }
 
     logger.info("Sync result summary: %s", summary)
-    return {"comparison": comp, "copy_create": copy_create_result, "copy_update": copy_update_result, "deleted": deleted, "delete_errors": delete_errors, "summary": summary}
+    return {"comparison": comp, "copy_create": copy_create_result, "copy_update": copy_update_result, "deleted": deleted, "delete_errors": delete_errors, "skipped_by_skip_copy": skipped_by_skip_copy, "summary": summary}
 
 def main() -> None:
     """
