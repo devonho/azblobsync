@@ -3,7 +3,6 @@ import os
 import sys
 import logging
 from dotenv import load_dotenv
-from bfs import get_folders_and_files
 from blobhelper import create_folder_structure, upload_files_from_list, compare_containers, copy_blobs, get_container_client, remove_placeholder_files
 from localfshelper import compare_local_to_container
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedIdentityCredential
@@ -46,8 +45,8 @@ def local_source_blob_container_target() -> dict:
 
     Environment variables consulted (can be overridden by command-line arg):
     - LOCAL_CONTAINER_PATH: local folder containing files to sync (preferred)
-    - TARGET_AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT_URL
-    - TARGET_AZURE_STORAGE_CONTAINER_NAME or AZURE_STORAGE_CONTAINER_NAME
+    - TARGET_AZURE_STORAGE_ACCOUNT_URL
+    - TARGET_AZURE_STORAGE_CONTAINER_NAME
     - SYNC_PREFIX (optional): limit comparison/upload to paths starting with this prefix
     - METADATA_URL_BASE (optional): passed through to uploader
 
@@ -62,10 +61,10 @@ def local_source_blob_container_target() -> dict:
         else:
             raise KeyError("LOCAL_CONTAINER_PATH must be provided as env var or first CLI argument")
 
-    target_account_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL") or os.environ.get("AZURE_STORAGE_ACCOUNT_URL")
-    target_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME") or os.environ.get("AZURE_STORAGE_CONTAINER_NAME")
+    target_account_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL")
+    target_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME")
     if not target_account_url or not target_container:
-        raise KeyError("TARGET_AZURE_STORAGE_ACCOUNT_URL and TARGET_AZURE_STORAGE_CONTAINER_NAME (or AZURE variants) must be set")
+        raise KeyError("TARGET_AZURE_STORAGE_ACCOUNT_URL and TARGET_AZURE_STORAGE_CONTAINER_NAME must be set")
 
     prefix = os.environ.get("SYNC_PREFIX")
 
@@ -193,11 +192,11 @@ def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = 
             in the target but not in the source should be deleted. If None,
             the value of the environment variable SKIP_DELETE is used.
 
-    Environment variables used (with fallbacks):
-    - SOURCE_AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT_URL
-    - SOURCE_AZURE_STORAGE_CONTAINER_NAME or AZURE_STORAGE_CONTAINER_NAME
-    - TARGET_AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT_URL
-    - TARGET_AZURE_STORAGE_CONTAINER_NAME or AZURE_STORAGE_CONTAINER_NAME
+    Environment variables used:
+    - SOURCE_AZURE_STORAGE_ACCOUNT_URL
+    - SOURCE_AZURE_STORAGE_CONTAINER_NAME
+    - TARGET_AZURE_STORAGE_ACCOUNT_URL
+    - TARGET_AZURE_STORAGE_CONTAINER_NAME
     - SYNC_PREFIX (optional): prefix to limit sync
     - SKIP_UPDATES (optional): 'true'/'false' (default 'true')
     - SKIP_DELETE (optional): 'true'/'false' (default 'false') unless
@@ -205,10 +204,10 @@ def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = 
 
     The function prints a summary of actions or errors.
     """
-    src_url = os.environ.get("SOURCE_AZURE_STORAGE_ACCOUNT_URL") or os.environ.get("AZURE_STORAGE_ACCOUNT_URL")
-    src_container = os.environ.get("SOURCE_AZURE_STORAGE_CONTAINER_NAME") or os.environ.get("AZURE_STORAGE_CONTAINER_NAME")
-    tgt_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL") or os.environ.get("AZURE_STORAGE_ACCOUNT_URL")
-    tgt_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME") or os.environ.get("AZURE_STORAGE_CONTAINER_NAME")
+    src_url = os.environ.get("SOURCE_AZURE_STORAGE_ACCOUNT_URL")
+    src_container = os.environ.get("SOURCE_AZURE_STORAGE_CONTAINER_NAME")
+    tgt_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL")
+    tgt_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME")
 
     if not src_url or not src_container or not tgt_url or not tgt_container:
         raise KeyError("Missing required environment variables for source/target account or container names")

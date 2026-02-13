@@ -4,17 +4,19 @@ Environment variables used by the project.
 
 | Variable | Required | Default | Description |
 |---|:---:|---|---|
-| DEBUG | Optional | `false` | When `true` enables DEBUG logging and more verbose output format. |
-| AZURE_STORAGE_ACCOUNT_URL | Conditional | - | Account URL for Azure Storage (e.g. `https://myaccount.blob.core.windows.net`). Used as a fallback if `SOURCE_`/`TARGET_` variables are not provided. |
-| AZURE_STORAGE_CONTAINER_NAME | Conditional | - | Container name used as a fallback for uploads when `SOURCE_`/`TARGET_` are not provided. |
 | LOCAL_CONTAINER_PATH | Optional | - | Local filesystem path to a folder containing files to sync when running in local->container mode. When set, the tool will compare files under this path to the target container and upload missing/updated files. |
-| METADATA_URL_BASE | Optional | - | Base URL used by `upload_files_from_list` to populate a `url` metadata entry for uploaded blobs. |
-| SOURCE_AZURE_STORAGE_ACCOUNT_URL | Optional | - | Overrides `AZURE_STORAGE_ACCOUNT_URL` for the source container when doing container-to-container sync. |
-| SOURCE_AZURE_STORAGE_CONTAINER_NAME | Optional | - | Overrides `AZURE_STORAGE_CONTAINER_NAME` for the source container. |
+| SOURCE_AZURE_STORAGE_ACCOUNT_URL | Required | - | Account URL for the source storage account when doing container-to-container sync (e.g. `https://srcaccount.blob.core.windows.net`). |
+| SOURCE_AZURE_STORAGE_CONTAINER_NAME | Required | - | Source container name for container-to-container sync. |
 | SOURCE_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the source account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
-| TARGET_AZURE_STORAGE_ACCOUNT_URL | Optional | - | Overrides `AZURE_STORAGE_ACCOUNT_URL` for the target container. |
-| TARGET_AZURE_STORAGE_CONTAINER_NAME | Optional | - | Overrides `AZURE_STORAGE_CONTAINER_NAME` for the target container. |
+| TARGET_AZURE_STORAGE_ACCOUNT_URL | Required | - | Account URL for the target storage account (e.g. `https://tgtaccount.blob.core.windows.net`). |
+| TARGET_AZURE_STORAGE_CONTAINER_NAME | Required | - | Target container name. |
 | TARGET_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the target account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
+
+
+| Variable | Required | Default | Description |
+|---|:---:|---|---|
+| DEBUG | Optional | `false` | When `true` enables DEBUG logging and more verbose output format. |
+| METADATA_URL_BASE | Optional | - | Base URL used by `upload_files_from_list` to populate a `url` metadata entry for uploaded blobs. |
 | SYNC_PREFIX | Optional | - | If set, limits listing/comparison/copy to blobs whose names start with this prefix. |
 | SKIP_UPDATES | Optional | `true` | When `true`, blobs detected as "updates" will overwrite target blobs. When `false`, update candidates are skipped. |
 | SKIP_DELETE | Optional | `true` | When `true`, blobs that exist in the target but not in the source are deleted during sync (can also be passed programmatically). |
@@ -32,16 +34,12 @@ Ensure the identity used to run the tool has appropriate permissions on source a
 Example `.env` snippet
 
 ```
-# account-level default (used if SOURCE_/TARGET_ not set)
-AZURE_STORAGE_ACCOUNT_URL=https://myaccount.blob.core.windows.net
-AZURE_STORAGE_CONTAINER_NAME=my-container
-
 # local mode (optional)
 LOCAL_CONTAINER_PATH=/path/to/local/folder
 # if you want to avoid uploading newly discovered files, set SKIP_COPY=true
 SKIP_COPY=false
 
-# explicit per-endpoint overrides (optional)
+# container-to-container sync mode
 SOURCE_AZURE_STORAGE_ACCOUNT_URL=https://srcaccount.blob.core.windows.net
 SOURCE_AZURE_STORAGE_CONTAINER_NAME=src-container
 TARGET_AZURE_STORAGE_ACCOUNT_URL=https://tgtaccount.blob.core.windows.net
