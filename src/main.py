@@ -5,9 +5,11 @@ import logging
 from dotenv import load_dotenv
 from bfs import get_folders_and_files
 from blobhelper import create_folder_structure, upload_files_from_list, compare_containers, copy_blobs, get_container_client, remove_placeholder_files
+from localfshelper import compare_local_to_container
 from azure.identity import DefaultAzureCredential, AzureCliCredential, ManagedIdentityCredential
 from azure.core.credentials import AzureNamedKeyCredential
 from urllib.parse import urlparse
+from pathlib import Path
 import time
 from datetime import datetime, timedelta
 
@@ -33,66 +35,120 @@ if os.getenv("DEBUG", "false").lower() == "true":
     pass
 
 
-def local_source_blob_container_target() -> None:
+def local_source_blob_container_target() -> dict:
     """
-    Synchronize local files from a `files` subdirectory under a provided base path
-    to an Azure Blob Storage container.
+    Synchronize local files from a folder to an Azure Blob Storage container using
+    a comparison step to determine which files to create, update, or delete.
 
-    This is meant for situations where the source files are on the local filesystem (e.g. downloaded from SharePoint)
+    This updated implementation uses `compare_local_to_container()` from
+    `src/localfshelper.py` to compute diffs and then uploads files that need
+    to be created or updated using `upload_files_from_list`.
 
-    Behavior:
-    - Reads the base path from `sys.argv[1]`.
-    - Uses `get_folders_and_files(root, base_path)` to obtain the local folder and
-      file listings, and additionally reads `filenames.txt` to filter which files
-      to upload (files matched by extension).
-    - Constructs blob names relative to the provided base path and uploads files
-      with `upload_files_from_list`, setting optional metadata using
-      `METADATA_URL_BASE`.
-    - Authenticates using `ManagedIdentityCredential()` for the upload call.
-
-    Environment variables:
-    - AZURE_STORAGE_ACCOUNT_URL: source storage account URL
-    - AZURE_STORAGE_CONTAINER_NAME: target container name
-    - METADATA_URL_BASE: base URL used to populate blob metadata 'url' (optional)
-
-    Args:
-        None. The function expects a single command-line argument: the base path
-        (accessible as `sys.argv[1]`).
-
-    Raises:
-        IndexError: if the base path argument is not provided on the command line.
-        Propagates exceptions raised by `get_folders_and_files` or
-        `upload_files_from_list`.
+    Environment variables consulted (can be overridden by command-line arg):
+    - LOCAL_CONTAINER_PATH: local folder containing files to sync (preferred)
+    - TARGET_AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT_URL
+    - TARGET_AZURE_STORAGE_CONTAINER_NAME or AZURE_STORAGE_CONTAINER_NAME
+    - SYNC_PREFIX (optional): limit comparison/upload to paths starting with this prefix
+    - METADATA_URL_BASE (optional): passed through to uploader
 
     Returns:
-        None
+        dict: result containing the comparison and lists of uploaded files.
     """
-    
-    root = "files"
-    base_path = sys.argv[1]
-    folder_list, file_list = get_folders_and_files(root, base_path)
-    
-    #folder_list = [folder["path"].replace("\\", "/") + "/" for folder in folder_list if folder["level"] > 0]
-    #file_list = [file["path"].replace("\\", "/") for file in file_list if file["level"] > 0]
-    #file_list = [base_path + "/" + root + "/" + f for f in file_list]
-    with open("filenames.txt",encoding="utf-8") as f:
-        lines = f.readlines()
-    pattern = r"\.[a-zA-Z0-9]+$"
-    filenames = []
-    for filename in lines:
-        match = re.search(pattern, filename)
-        if(match):
-            filenames.append(filename)    
-    file_list = [base_path + "/" + root + "/" +  f.lstrip("./").rstrip("\n") for f in filenames]
+    # prefer explicit env var, otherwise allow a command-line arg for convenience
+    local_path = os.environ.get("LOCAL_CONTAINER_PATH")
+    if not local_path:
+        if len(sys.argv) > 1:
+            local_path = sys.argv[1]
+        else:
+            raise KeyError("LOCAL_CONTAINER_PATH must be provided as env var or first CLI argument")
 
-    upload_files_from_list(
-        account_url=os.environ["AZURE_STORAGE_ACCOUNT_URL"],
-        container_name=os.environ["AZURE_STORAGE_CONTAINER_NAME"],
-        file_paths=file_list,
-        base_path=base_path + "/" + root,
-        credential=ManagedIdentityCredential(),
-        metadata_url_base=os.environ["METADATA_URL_BASE"]
-    )
+    target_account_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL") or os.environ.get("AZURE_STORAGE_ACCOUNT_URL")
+    target_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME") or os.environ.get("AZURE_STORAGE_CONTAINER_NAME")
+    if not target_account_url or not target_container:
+        raise KeyError("TARGET_AZURE_STORAGE_ACCOUNT_URL and TARGET_AZURE_STORAGE_CONTAINER_NAME (or AZURE variants) must be set")
+
+    prefix = os.environ.get("SYNC_PREFIX")
+
+    # Build credential: prefer key-based AzureNamedKeyCredential if env var present
+    key = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_KEY")
+    if key:
+        try:
+            parsed = urlparse(target_account_url)
+            host = parsed.netloc
+            account_name = host.split(".")[0] if host else None
+        except Exception:
+            account_name = None
+        if account_name:
+            logger.info("Using AzureNamedKeyCredential for target account '%s' from env TARGET_AZURE_STORAGE_CONTAINER_KEY", account_name)
+            target_cred = AzureNamedKeyCredential(account_name, key)
+        else:
+            logger.warning("Could not parse account name from URL '%s', falling back to ManagedIdentityCredential", target_account_url)
+            target_cred = ManagedIdentityCredential()
+    else:
+        target_cred = ManagedIdentityCredential()
+
+    # perform comparison using the selected credential
+    try:
+        comp = compare_local_to_container(
+            local_path=local_path,
+            target_account_url=target_account_url,
+            target_container_name=target_container,
+            credential=target_cred,
+            prefix=prefix,
+        )
+    except Exception as e:
+        logger.exception("Local->container comparison failed: %s", e)
+        raise
+
+    to_create = comp.get("to_create", [])
+    to_update = comp.get("to_update", [])
+    to_delete = comp.get("to_delete", [])
+
+    logger.info("Local->container compare: create=%d update=%d delete=%d", len(to_create), len(to_update), len(to_delete))
+
+    uploaded = []
+    upload_errors = {}
+    skipped_updates = []
+
+    # Respect OVERWRITE_UPDATES env var: when false, do not upload update candidates
+    overwrite_updates = os.environ.get("OVERWRITE_UPDATES", "true").lower() == "true"
+    if not overwrite_updates and to_update:
+        skipped_updates = list(to_update)
+        logger.info("OVERWRITE_UPDATES=false: skipping %d update candidates", len(skipped_updates))
+
+    # Upload files that need to be created or updated (depending on overwrite flag)
+    names_to_upload = to_create + (to_update if overwrite_updates else [])
+    if names_to_upload:
+        file_paths = []
+        for name in names_to_upload:
+            file_paths.append(str(Path(local_path) / Path(name)))
+
+        try:
+            upload_files_from_list(
+                account_url=target_account_url,
+                container_name=target_container,
+                file_paths=file_paths,
+                base_path=local_path,
+                credential=target_cred,
+                overwrite=True,
+                metadata_url_base=os.environ.get("METADATA_URL_BASE"),
+            )
+            uploaded = list(names_to_upload)
+            logger.info("Uploaded %d files (create+update)", len(uploaded))
+        except Exception as e:
+            logger.exception("Error uploading local files: %s", e)
+            for name in names_to_upload:
+                upload_errors[name] = str(e)
+
+    result = {
+        "comparison": comp,
+        "uploaded": uploaded,
+        "upload_errors": upload_errors,
+        "to_delete": to_delete,
+        "skipped_updates": skipped_updates,
+    }
+
+    return result
 
 def blob_container_source_blob_container_target_main(delete_extraneous: bool | None = None) -> None:
     """
