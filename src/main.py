@@ -364,6 +364,25 @@ def main() -> None:
     start_weekday = _parse_weekday(start_day_env)
     start_time_hm = _parse_time_of_day(start_time_env)
 
+    # Decide which sync mode to run based on environment variables
+    has_source_container = os.environ.get("SOURCE_AZURE_STORAGE_CONTAINER_NAME") is not None
+    has_local_path = os.environ.get("LOCAL_CONTAINER_PATH") is not None
+
+    if has_source_container and has_local_path:
+        logger.error("Configuration error: both SOURCE_AZURE_STORAGE_CONTAINER_NAME and LOCAL_CONTAINER_PATH are set; please set only one mode")
+        raise KeyError("Both SOURCE_AZURE_STORAGE_CONTAINER_NAME and LOCAL_CONTAINER_PATH are set; choose only one mode")
+
+    if has_source_container:
+        selected_sync_func = blob_container_source_blob_container_target_main
+        logger.info("Selected sync mode: container-to-container (SOURCE_AZURE_STORAGE_CONTAINER_NAME present)")
+    elif has_local_path:
+        selected_sync_func = local_source_blob_container_target
+        logger.info("Selected sync mode: local->container (LOCAL_CONTAINER_PATH present)")
+    else:
+        # Default to container-to-container sync if no explicit mode is set
+        selected_sync_func = blob_container_source_blob_container_target_main
+        logger.info("No mode env var explicitly set; defaulting to container-to-container sync")
+
     if interval_minutes > 0:
         # If a constrained start is configured, compute wait until that start
         if start_weekday is not None or start_time_hm is not None:
@@ -397,7 +416,7 @@ def main() -> None:
             while True:
                 logger.info("Scheduled run: starting sync")
                 try:
-                    blob_container_source_blob_container_target_main()
+                    selected_sync_func()
                 except Exception:
                     logger.exception("Scheduled sync run failed")
                 logger.info("Scheduled run: sleeping for %s minutes", interval_minutes)
@@ -411,7 +430,7 @@ def main() -> None:
     else:
         logger.info("Running single sync invocation")
         try:
-            blob_container_source_blob_container_target_main()
+            selected_sync_func()
         except Exception:
             logger.exception("Sync failed")
             raise
