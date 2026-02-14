@@ -110,3 +110,15 @@ Optional/alternative:
 
 Notes:
 - If you prefer not to use Managed Identity, you can supply account keys (via `SOURCE_AZURE_STORAGE_CONTAINER_KEY` / `TARGET_AZURE_STORAGE_CONTAINER_KEY`) or a SAS token; those options do not require RBAC assignments but require secure secret handling.
+
+## Testing
+
+This project includes comprehensive integration tests that use actual Azure Blob Storage APIs (no mocking). Tests validate all core functionality including file uploads, container comparisons, blob copying, and local-to-container synchronization.
+
+### Running Tests
+
+- `tests/README.md` - Detailed testing documentation
+- `tests/test_blobhelper.py` - Tests for Azure Blob Storage operations (folder creation, file uploads, container comparison, blob copying)
+- `tests/test_localfshelper.py` - Tests for local filesystem to container synchronization
+
+Tests automatically create and clean up temporary Azure resources (containers, blobs) and local directories. See [tests/README.md](tests/README.md) for detailed information about test configuration and troubleshooting.
