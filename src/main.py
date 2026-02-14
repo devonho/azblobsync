@@ -44,7 +44,7 @@ def local_source_blob_container_target() -> dict:
     to be created or updated using `upload_files_from_list`.
 
     Environment variables consulted (can be overridden by command-line arg):
-    - LOCAL_CONTAINER_PATH: local folder containing files to sync (preferred)
+    - SOURCE_LOCAL_CONTAINER_PATH: local folder containing files to sync (preferred)
     - TARGET_AZURE_STORAGE_ACCOUNT_URL
     - TARGET_AZURE_STORAGE_CONTAINER_NAME
     - SYNC_PREFIX (optional): limit comparison/upload to paths starting with this prefix
@@ -54,12 +54,12 @@ def local_source_blob_container_target() -> dict:
         dict: result containing the comparison and lists of uploaded files.
     """
     # prefer explicit env var, otherwise allow a command-line arg for convenience
-    local_path = os.environ.get("LOCAL_CONTAINER_PATH")
+    local_path = os.environ.get("SOURCE_LOCAL_CONTAINER_PATH")
     if not local_path:
         if len(sys.argv) > 1:
             local_path = sys.argv[1]
         else:
-            raise KeyError("LOCAL_CONTAINER_PATH must be provided as env var or first CLI argument")
+            raise KeyError("SOURCE_LOCAL_CONTAINER_PATH must be provided as env var or first CLI argument")
 
     target_account_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL")
     target_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME")
@@ -405,18 +405,18 @@ def main() -> None:
 
     # Decide which sync mode to run based on environment variables
     has_source_container = os.environ.get("SOURCE_AZURE_STORAGE_CONTAINER_NAME") is not None
-    has_local_path = os.environ.get("LOCAL_CONTAINER_PATH") is not None
+    has_local_path = os.environ.get("SOURCE_LOCAL_CONTAINER_PATH") is not None
 
     if has_source_container and has_local_path:
-        logger.error("Configuration error: both SOURCE_AZURE_STORAGE_CONTAINER_NAME and LOCAL_CONTAINER_PATH are set; please set only one mode")
-        raise KeyError("Both SOURCE_AZURE_STORAGE_CONTAINER_NAME and LOCAL_CONTAINER_PATH are set; choose only one mode")
+        logger.error("Configuration error: both SOURCE_AZURE_STORAGE_CONTAINER_NAME and SOURCE_LOCAL_CONTAINER_PATH are set; please set only one mode")
+        raise KeyError("Both SOURCE_AZURE_STORAGE_CONTAINER_NAME and SOURCE_LOCAL_CONTAINER_PATH are set; choose only one mode")
 
     if has_source_container:
         selected_sync_func = blob_container_source_blob_container_target_main
         logger.info("Selected sync mode: container-to-container (SOURCE_AZURE_STORAGE_CONTAINER_NAME present)")
     elif has_local_path:
         selected_sync_func = local_source_blob_container_target
-        logger.info("Selected sync mode: local->container (LOCAL_CONTAINER_PATH present)")
+        logger.info("Selected sync mode: local->container (SOURCE_LOCAL_CONTAINER_PATH present)")
     else:
         # Default to container-to-container sync if no explicit mode is set
         selected_sync_func = blob_container_source_blob_container_target_main

@@ -7,7 +7,7 @@ so the container mirrors the local folder.
 
 The function reads the following environment variables by default (can be
 overridden by passing parameters):
-- LOCAL_CONTAINER_PATH
+- SOURCE_LOCAL_CONTAINER_PATH
 - TARGET_AZURE_STORAGE_ACCOUNT_URL
 - TARGET_AZURE_STORAGE_CONTAINER_NAME
 
@@ -38,7 +38,7 @@ def compare_local_to_container(
 
     Behavior:
     - local_path: path to the local folder containing files to sync. If not
-      provided, the function reads the `LOCAL_CONTAINER_PATH` environment
+      provided, the function reads the `SOURCE_LOCAL_CONTAINER_PATH` environment
       variable.
     - target_account_url and target_container_name: if not provided the
       function reads `TARGET_AZURE_STORAGE_ACCOUNT_URL` and
@@ -60,16 +60,8 @@ def compare_local_to_container(
             "summary": {"create": N, "update": M, "delete": K}
         }
     """
-    # Resolve environment defaults
     if not local_path:
-        local_path = os.environ.get("LOCAL_CONTAINER_PATH")
-    if not target_account_url:
-        target_account_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL")
-    if not target_container_name:
-        target_container_name = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME")
-
-    if not local_path:
-        raise KeyError("LOCAL_CONTAINER_PATH must be provided either as an argument or environment variable")
+        raise KeyError("SOURCE_LOCAL_CONTAINER_PATH must be provided either as an argument or environment variable")
     if not target_account_url or not target_container_name:
         raise KeyError("TARGET_AZURE_STORAGE_ACCOUNT_URL and TARGET_AZURE_STORAGE_CONTAINER_NAME must be provided")
 
