@@ -111,6 +111,10 @@ Optional/alternative:
 Notes:
 - If you prefer not to use Managed Identity, you can supply account keys (via `SOURCE_AZURE_STORAGE_CONTAINER_KEY` / `TARGET_AZURE_STORAGE_CONTAINER_KEY`) or a SAS token; those options do not require RBAC assignments but require secure secret handling.
 
+The identity used to deploy the container app also needs:
+- Container Apps Contributor — for "Microsoft.App/containerApps/write" permission.
+
+
 ## Testing
 
 This project includes comprehensive integration tests that use actual Azure Blob Storage APIs (no mocking). Tests validate all core functionality including file uploads, container comparisons, blob copying, and local-to-container synchronization.
