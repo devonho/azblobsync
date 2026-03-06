@@ -1,9 +1,10 @@
 # azblobsync
 
-**azblobsync** is a Python-based one-way synchronization tool for Azure Blob Storage that intelligently compares and syncs files between sources and targets. It supports two primary sync modes:
+**azblobsync** is a Python-based one-way synchronization tool for Azure Blob Storage that intelligently compares and syncs files between sources and targets. It supports three primary sync modes:
 
 1. **Local-to-Container**: Sync files from a local filesystem directory to an Azure Blob Storage container
 2. **Container-to-Container**: Sync blobs between two Azure Blob Storage containers (even across different storage accounts)
+3. **Target Purge**: Delete blobs from the target container (optionally limited by `SYNC_PREFIX`) when only target settings are provided
 
 Key Features
 
@@ -35,12 +36,18 @@ Use Cases
 | Variable | Required | Default | Description |
 |---|:---:|---|---|
 | SOURCE_LOCAL_CONTAINER_PATH | Optional | - | Local filesystem path to a folder containing files to sync when running in local->container mode. When set, the tool will compare files under this path to the target container and upload missing/updated files. |
-| SOURCE_AZURE_STORAGE_ACCOUNT_URL | Required | - | Account URL for the source storage account when doing container-to-container sync (e.g. `https://srcaccount.blob.core.windows.net`). |
-| SOURCE_AZURE_STORAGE_CONTAINER_NAME | Required | - | Source container name for container-to-container sync. |
+| SOURCE_AZURE_STORAGE_ACCOUNT_URL | Optional | - | Account URL for the source storage account when doing container-to-container sync (e.g. `https://srcaccount.blob.core.windows.net`). Not used in local->container or target-purge mode. |
+| SOURCE_AZURE_STORAGE_CONTAINER_NAME | Optional | - | Source container name for container-to-container sync. Not used in local->container or target-purge mode. |
 | SOURCE_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the source account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
 | TARGET_AZURE_STORAGE_ACCOUNT_URL | Required | - | Account URL for the target storage account (e.g. `https://tgtaccount.blob.core.windows.net`). |
 | TARGET_AZURE_STORAGE_CONTAINER_NAME | Required | - | Target container name. |
 | TARGET_AZURE_STORAGE_CONTAINER_KEY | Optional | - | Storage account key for the target account. If set the tool will prefer a named/key credential built from this value. If not set the code falls back to `ManagedIdentityCredential`. |
+
+Mode selection notes:
+
+- If `SOURCE_LOCAL_CONTAINER_PATH` is set, local->container mode is used.
+- If source container settings are set, container-to-container mode is used.
+- If `TARGET_AZURE_STORAGE_ACCOUNT_URL` and `TARGET_AZURE_STORAGE_CONTAINER_NAME` are set and source/local settings are not set, target-purge mode is used.
 
 ## Sync options environment variables
 

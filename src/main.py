@@ -336,6 +336,83 @@ def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = 
     logger.info("Sync result summary: %s", summary)
     return {"comparison": comp, "copy_create": copy_create_result, "copy_update": copy_update_result, "deleted": deleted, "delete_errors": delete_errors, "skipped_by_skip_copy": skipped_by_skip_copy, "summary": summary}
 
+
+def purge_target_blob_container_target_main(SKIP_DELETE: bool | None = None) -> dict:
+    """
+    Purge blobs from the target container.
+
+    This mode is intended for configurations where only target container settings
+    are provided and no source settings are set.
+
+    Environment variables used:
+    - TARGET_AZURE_STORAGE_ACCOUNT_URL
+    - TARGET_AZURE_STORAGE_CONTAINER_NAME
+    - TARGET_AZURE_STORAGE_CONTAINER_KEY (optional)
+    - SYNC_PREFIX (optional): only purge blobs under this prefix
+    """
+    tgt_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL")
+    tgt_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME")
+    if not tgt_url or not tgt_container:
+        raise KeyError("TARGET_AZURE_STORAGE_ACCOUNT_URL and TARGET_AZURE_STORAGE_CONTAINER_NAME must be set")
+
+    prefix = os.environ.get("SYNC_PREFIX")
+
+    key = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_KEY")
+    if key:
+        try:
+            parsed = urlparse(tgt_url)
+            host = parsed.netloc
+            account_name = host.split(".")[0] if host else None
+        except Exception:
+            account_name = None
+        if account_name:
+            logger.info("Using AzureNamedKeyCredential for target account '%s' from env TARGET_AZURE_STORAGE_CONTAINER_KEY", account_name)
+            tgt_cred = AzureNamedKeyCredential(account_name, key)
+        else:
+            logger.warning("Could not parse account name from URL '%s', falling back to ManagedIdentityCredential", tgt_url)
+            tgt_cred = ManagedIdentityCredential()
+    else:
+        tgt_cred = ManagedIdentityCredential()
+
+    tgt_client = get_container_client(tgt_url, tgt_container, tgt_cred)
+    blob_iter = tgt_client.list_blobs(name_starts_with=prefix) if prefix else tgt_client.list_blobs()
+    candidate_names = [blob.name for blob in blob_iter]
+
+    # Allow function parameter to override environment variable.
+    if SKIP_DELETE is None:
+        SKIP_DELETE = os.environ.get("SKIP_DELETE", "true").lower() == "true"
+
+    deleted = []
+    delete_errors = {}
+    skipped_by_skip_delete = []
+    if SKIP_DELETE:
+        skipped_by_skip_delete = list(candidate_names)
+        logger.info("SKIP_DELETE is true: skipping deletion of %d target blobs", len(skipped_by_skip_delete))
+    else:
+        for name in candidate_names:
+            try:
+                tgt_client.delete_blob(name)
+                deleted.append(name)
+            except Exception as e:
+                delete_errors[name] = str(e)
+
+    logger.info(
+        "Purge result: deleted=%d delete_errors=%d prefix=%s",
+        len(deleted),
+        len(delete_errors),
+        prefix if prefix else "<none>",
+    )
+
+    return {
+        "deleted": deleted,
+        "delete_errors": delete_errors,
+        "skipped_by_skip_delete": skipped_by_skip_delete,
+        "summary": {
+            "deleted": len(deleted),
+            "delete_errors": len(delete_errors),
+        },
+    }
+
 def main() -> None:
     """
     Run sync once or in a scheduling loop controlled by LOOP_INTERVAL_MINUTES.
@@ -405,7 +482,10 @@ def main() -> None:
 
     # Decide which sync mode to run based on environment variables
     has_source_container = os.environ.get("SOURCE_AZURE_STORAGE_CONTAINER_NAME") is not None
+    has_source_account_url = os.environ.get("SOURCE_AZURE_STORAGE_ACCOUNT_URL") is not None
     has_local_path = os.environ.get("SOURCE_LOCAL_CONTAINER_PATH") is not None
+    has_target_account_url = os.environ.get("TARGET_AZURE_STORAGE_ACCOUNT_URL") is not None
+    has_target_container = os.environ.get("TARGET_AZURE_STORAGE_CONTAINER_NAME") is not None
 
     if has_source_container and has_local_path:
         logger.error("Configuration error: both SOURCE_AZURE_STORAGE_CONTAINER_NAME and SOURCE_LOCAL_CONTAINER_PATH are set; please set only one mode")
@@ -417,6 +497,9 @@ def main() -> None:
     elif has_local_path:
         selected_sync_func = local_source_blob_container_target
         logger.info("Selected sync mode: local->container (SOURCE_LOCAL_CONTAINER_PATH present)")
+    elif has_target_account_url and has_target_container and not has_source_account_url and not has_source_container and not has_local_path:
+        selected_sync_func = purge_target_blob_container_target_main
+        logger.info("Selected sync mode: target purge (only target settings are present)")
     else:
         # Default to container-to-container sync if no explicit mode is set
         selected_sync_func = blob_container_source_blob_container_target_main
