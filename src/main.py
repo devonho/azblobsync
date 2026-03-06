@@ -291,7 +291,7 @@ def blob_container_source_blob_container_target_main(SKIP_DELETE: bool | None = 
             blob_names=to_update,
             source_credential=src_cred,
             target_credential=tgt_cred,
-            overwrite=bool(SKIP_UPDATES),
+            overwrite=True,
             create_folders=True,
             verbose=verbose,
         )
