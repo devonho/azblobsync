@@ -12,7 +12,7 @@ from pathlib import Path
 import time
 from datetime import datetime, timedelta
 
-load_dotenv()
+#load_dotenv()
 
 
 logger = logging.getLogger("azblobsync")
