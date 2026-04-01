@@ -160,8 +160,13 @@ def upload_files_from_list(
             # Determine blob name
             if no_target_subfolders == True:
                 blob_name = local_file.name
+                base = Path(base_path)
+                relative_path = local_file.relative_to(base)
+                url = str(relative_path).replace('\\', '/')                
+                
             elif base_path:
                 base = Path(base_path)
+                url = blob_name
                 try:
                     relative_path = local_file.relative_to(base)
                     blob_name = str(relative_path).replace('\\', '/')
@@ -170,6 +175,7 @@ def upload_files_from_list(
                     blob_name = local_file.name
             else:
                 blob_name = local_file.name
+                url = blob_name
             
             # Upload file
             with open(local_file, 'rb') as data:
@@ -177,7 +183,7 @@ def upload_files_from_list(
                     name=blob_name,
                     data=data,
                     overwrite=overwrite,
-                    metadata={"url": metadata_url_base + "/" + quote(blob_name)} if metadata_url_base != None else None,                    
+                    metadata={"url": metadata_url_base + "/" + quote(url)} if metadata_url_base != None else None,                    
                     encoding="utf-8",
                     logging_enable=True
                 )
