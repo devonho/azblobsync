@@ -128,7 +128,8 @@ def upload_files_from_list(
     base_path: Optional[str] = None,
     credential: Optional[object] = None,
     overwrite: bool = True,
-    metadata_url_base : str = None
+    metadata_url_base : str = None,
+    no_target_subfolders : bool = False
 ) -> None:
     """
     Upload multiple files from a list of local file paths to Azure Blob Storage.
@@ -157,7 +158,9 @@ def upload_files_from_list(
                 continue
             
             # Determine blob name
-            if base_path:
+            if no_target_subfolders == True:
+                blob_name = local_file.name
+            elif base_path:
                 base = Path(base_path)
                 try:
                     relative_path = local_file.relative_to(base)
